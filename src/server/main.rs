@@ -91,23 +91,16 @@ fn update(
 }
 
 fn parse_experiment(url: String) -> Result<Experiment, ()> {
-    match fs::File::open(format!("{}{}", PATH, DEPLOYMENT)) {
-        Ok(mut file) => {
-            let mut contents = String::new();
-            if let Ok(_) = file.read_to_string(&mut contents) {
-                match toml::from_str::<Experiment>(&contents) {
-                    Ok(mut experiment) => {
-                        experiment.url = url;
-                        Ok(experiment)
-                    }
-                    _ => Err(()),
-                }
-            } else {
-                Err(())
+    if let Ok(mut file) = fs::File::open(format!("{}{}", PATH, DEPLOYMENT)) {
+        let mut contents = String::new();
+        if let Ok(_) = file.read_to_string(&mut contents) {
+            if let Ok(mut experiment) = toml::from_str::<Experiment>(&contents) {
+                experiment.url = url;
+                return Ok(experiment);
             }
         }
-        _ => Err(()),
     }
+    Err(())
 }
 
 fn init() -> (Repository, Experiment) {
