@@ -1,0 +1,17 @@
+[package]
+name = "cluster"
+version = "0.1.0"
+authors = ["Nathan Corbyn <me@nathancorbyn.com>"]
+edition = "2018"
+
+[[bin]]
+name = "cluster_server"
+path = "src/server/main.rs"
+
+[[bin]]
+name = "cluster_client"
+path = "src/client/main.rs"
+
+[dependencies]
+rocket = "0.4.1"
+rusqlite = "0.19.0"
