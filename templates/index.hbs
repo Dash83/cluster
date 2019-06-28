@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>cluster</title>
+    <script type="text/javascript">
+      function change() {
+        var url = encodeURIComponent(document.getElementById('url').value).trim();
+        if (url != "") {
+          window.location = '/repo/' + url;
+        }
+      }
+
+      function update() {
+        window.location = '/update';
+      }
+    </script>
+  </head>
+  <body>
+    <h1>cluster</h1>
+    <h3>v0.1.0</h3>
+    <p>
+      cloned repository
+      <a href="{{url}}">{{url}}</a>
+      <button onclick="update()">update</button>
+    </p>
+    <input id="url" type="text"></input>
+    <button onclick="change()">change</button>
+      <h2>{{name}}</h2>
+      <pre>
+        {{#each setup as |command|}}
+          {{command}}
+        {{/each}}
+      </pre>
+      <h3>hosts</h3>
+      {{#each hosts}}
+      <p>{{@key}} ({{#if running}}running{{else}}not running{{/if}})</p>
+        <pre>
+          {{#each setup as |command|}}
+            {{command}}
+          {{/each}}
+        </pre>
+      {{/each}}
+  </body>
+</html>
