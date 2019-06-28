@@ -3,6 +3,7 @@
 extern crate git2;
 #[macro_use]
 extern crate rocket;
+#[macro_use]
 extern crate rocket_contrib;
 extern crate serde;
 extern crate toml;
@@ -12,6 +13,7 @@ use git2::Repository;
 use rocket::response::Redirect;
 use rocket::State;
 
+use rocket_contrib::json::JsonValue;
 use rocket_contrib::templates::Template;
 
 use serde::{Deserialize, Serialize};
@@ -54,8 +56,10 @@ fn ready(hostname: String, experiment: State<'_, Mutex<Experiment>>) {
 }
 
 #[get("/repo")]
-fn get_repo(experiment: State<'_, Mutex<Experiment>>) -> String {
-    experiment.lock().unwrap().url.clone()
+fn get_repo(experiment: State<'_, Mutex<Experiment>>) -> JsonValue {
+    json!({
+        "url": experiment.lock().unwrap().url.clone()
+    })
 }
 
 #[get("/repo/<url>")]
@@ -90,6 +94,17 @@ fn update(
     Redirect::to(uri!(index))
 }
 
+#[get("/status")]
+fn status(experiment: State<'_, Mutex<Experiment>>) -> JsonValue {
+    let mut running = vec![];
+    for (name, host) in experiment.lock().unwrap().hosts.iter() {
+        if host.running {
+            running.push(name.clone());
+        }
+    }
+    json!(running)
+}
+
 fn parse_experiment(url: String) -> Result<Experiment, ()> {
     if let Ok(mut file) = fs::File::open(format!("{}{}", PATH, DEPLOYMENT)) {
         let mut contents = String::new();
@@ -116,7 +131,8 @@ fn main() {
     rocket::ignite()
         .manage(Mutex::new(repo))
         .manage(Mutex::new(experiment))
-        .mount("/", routes![index, ready, get_repo, set_repo, update])
+        .mount("/", routes![index])
+        .mount("/api/", routes![ready, get_repo, set_repo, update, status])
         .attach(Template::fairing())
         .launch();
 }
