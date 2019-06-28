@@ -55,6 +55,7 @@
     <style type="text/css">
       body {
         font-family: 'M PLUS Rounded 1c', sans-serif;
+        padding: 15px;
       }
 
       a {
@@ -111,7 +112,7 @@
         padding: 3px 5px 3px 5px;
         box-shadow: none;
         width: 100%;
-        margin-right: 5px;
+        margin-right: 20px;
       }
 
       .status {
@@ -142,15 +143,18 @@
   <body>
     <h1>cluster</h1>
     <h3>v0.1.0</h3>
+    <br><br>
     <p id="info">
       cloned repository
       <a href="{{url}}">{{url}}</a>
       <button id="update" onclick="update()">update</button>
     </p>
+    <br>
     <form>
       <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
       <button onclick="change()">change</button>
     </form>
+    <br>
     <h2>{{name}}</h2>
     <div class="split">
       <div>
