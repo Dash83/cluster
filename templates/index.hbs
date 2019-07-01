@@ -6,6 +6,21 @@
     <script type="text/javascript">
       var repo = '{{{url}}}';
 
+      function get(url, callback) {
+        var xhttp = new XMLHttpRequest();
+        xhttp.open("GET", url);
+        xhttp.send();
+        xhttp.onreadystatechange = (e) => {
+          try {
+            var response = JSON.parse(xhttp.responseText);
+            if (response.status == "ok") {
+              delete response.status;
+              callback(response);
+            }
+          } catch (e) {}
+        }
+      }
+
       function change() {
         var url = encodeURIComponent(document.getElementById('url').value).trim();
         if (url !== "") {
@@ -18,35 +33,23 @@
       }
 
       function refreshStatus() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.open("GET", "/api/status");
-        xhttp.send();
-        xhttp.onreadystatechange = (e) => {
-          try {
-            var response = JSON.parse(xhttp.responseText);
-            for (running of response) {
-              var element = document.getElementById(running);
-              if (typeof(element) != 'undefined' && element != null) {
-                element.innerHTML = "running";
-                element.classList.add('running');
-              }
+        get("/api/status", (response) => {
+          for (running of response.hosts) {
+            var element = document.getElementById(running);
+            if (typeof(element) != 'undefined' && element != null) {
+              element.innerHTML = "running";
+              element.classList.add('running');
             }
-          } catch (e) {}
-        }
+          }
+        });
       }
 
       function checkRepo() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.open("GET", "/api/repo");
-        xhttp.send();
-        xhttp.onreadystatechange = (e) => {
-          try {
-            var response = JSON.parse(xhttp.responseText);
-            if (response.url != repo) {
-              update(); 
-            }
-          } catch (e) {}
-        }
+        get("/api/repo", (response) => {
+          if (response.url != repo) {
+            update(); 
+          }
+        });
       }
 
       setInterval(refreshStatus, 500);
@@ -160,8 +163,9 @@
       <div>
         <h3>global setup</h3>
         <pre>
-          {{#each setup as |command|}}
-            {{command}}
+          {{command}}
+          {{#each args as |arg|}}
+            {{arg}}
           {{/each}}
         </pre>
       </div>
@@ -170,8 +174,9 @@
         {{#each hosts}}
           <p>{{@key}} (<span class="status" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)</p>
           <pre>
-            {{#each setup as |command|}}
-              {{command}}
+            {{command}}
+            {{#each args as |arg|}}
+              {{arg}}
             {{/each}}
           </pre>
         {{/each}}
