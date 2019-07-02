@@ -90,6 +90,7 @@
         width: 100%; 
         display: flex;
         flex-direction: row;
+        margin: 0;
       }
 
       button {
@@ -103,6 +104,8 @@
         border-radius: 5px;
         transition: background-color 100ms, color 100ms;
         padding: 3px 5px 3px 5px;
+        float: right;
+        min-width: 70px;
       }
 
       button:hover {
@@ -142,8 +145,8 @@
         width: 100%;
       }
 
-      #update {
-        float: right; 
+      #info {
+        height: 32px;
       }
     </style>
   </head>
@@ -151,11 +154,11 @@
     <h1>cluster</h1>
     <h3>v0.1.0</h3>
     <br><br>
-    <p id="info">
+    <div id="info">
       cloned repository
       <a href="{{url}}">{{url}}</a>
       <button id="update" onclick="update()">update</button>
-    </p>
+    </div>
     <br>
     <form>
       <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
@@ -163,7 +166,7 @@
     </form>
     <br>
     <button onclick="restart()">restart</button>
-    <br>
+    <br><br>
     <h2>{{name}}</h2>
     <div class="split">
       {{#if command}}
