@@ -21,6 +21,7 @@ reqwest = "0.9.18"
 gethostname = "0.2.0"
 shared_child = "0.3.3"
 chrono = "0.4.7"
+libc = "0.2.58"
 
 [dependencies.rocket_contrib]
 version = "0.4.2"

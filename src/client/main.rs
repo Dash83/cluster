@@ -2,6 +2,7 @@ extern crate chrono;
 extern crate cluster;
 extern crate gethostname;
 extern crate git2;
+extern crate libc;
 extern crate reqwest;
 extern crate serde;
 extern crate shared_child;
@@ -87,7 +88,9 @@ impl Client {
 
     fn kill(&self) {
         if let Some(ref child) = *self.to_kill.lock().unwrap() {
-            child.kill().unwrap();
+            unsafe {
+                libc::kill(child.id() as libc::pid_t, 9);
+            }
         }
     }
 
