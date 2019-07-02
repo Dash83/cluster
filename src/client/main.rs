@@ -89,7 +89,7 @@ impl Client {
     fn kill(&self) {
         if let Some(ref child) = *self.to_kill.lock().unwrap() {
             unsafe {
-                libc::kill(child.id() as libc::pid_t, 9);
+                libc::kill(child.id() as libc::pid_t, -9);
             }
         }
     }
