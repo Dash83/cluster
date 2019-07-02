@@ -19,11 +19,12 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
-use std::{fs, thread, time};
+use std::{env, fs, thread, time};
 
 const SERVER: &'static str = "http://localhost:8000";
 
 struct Client {
+    headless: bool,
     hostname: String,
     experiment: Arc<Mutex<Experiment>>,
     to_kill: Arc<Mutex<Option<Arc<SharedChild>>>>,
@@ -32,10 +33,17 @@ struct Client {
 impl Client {
     fn new() -> Client {
         Client {
+            headless: false,
             hostname: gethostname::gethostname().into_string().unwrap(),
             experiment: Arc::new(Mutex::new(Default::default())),
             to_kill: Arc::new(Mutex::new(None)),
         }
+    }
+
+    fn new_headless() -> Client {
+        let mut client = Client::new();
+        client.headless = true;
+        client
     }
 
     fn poll(&mut self) {
@@ -81,12 +89,15 @@ impl Client {
         );
         let experiment = Arc::clone(&self.experiment);
         let to_kill = Arc::clone(&self.to_kill);
+        let headless = self.headless;
         thread::spawn(move || {
             let command = { experiment.lock().unwrap().gen_command() };
             if let Some(mut command) = command {
-                let (out, err) = create_log_files(&log_name);
-                command.stdout(Stdio::from(out));
-                command.stderr(Stdio::from(err));
+                if headless {
+                    let (out, err) = create_log_files(&log_name);
+                    command.stdout(Stdio::from(out));
+                    command.stderr(Stdio::from(err));
+                }
                 if let Ok(child) = SharedChild::spawn(&mut command) {
                     let child = Arc::new(child);
                     {
@@ -106,9 +117,11 @@ impl Client {
                     .gen_command()
             };
             if let Some(mut command) = command {
-                let (out, err) = create_log_files(&log_name);
-                command.stdout(Stdio::from(out));
-                command.stderr(Stdio::from(err));
+                if headless {
+                    let (out, err) = create_log_files(&log_name);
+                    command.stdout(Stdio::from(out));
+                    command.stderr(Stdio::from(err));
+                }
                 if let Ok(child) = SharedChild::spawn(&mut command) {
                     let child = Arc::new(child);
                     {
@@ -130,7 +143,17 @@ fn create_log_files(name: &str) -> (File, File) {
 }
 
 fn main() {
-    let mut client = Client::new();
+    let mut headless = false;
+    for arg in env::args() {
+        if arg == "--headless" {
+            headless = true;
+        }
+    }
+    let mut client = if headless {
+        Client::new_headless()
+    } else {
+        Client::new()
+    };
     loop {
         client.poll();
         thread::sleep(time::Duration::from_millis(500));
