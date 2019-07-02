@@ -21,7 +21,7 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::{env, fs, thread, time};
 
-const SERVER: &'static str = "http://localhost:8000";
+const SERVER: &'static str = "http://192.168.100.1:8000";
 
 struct Client {
     headless: bool,
