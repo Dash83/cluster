@@ -76,7 +76,10 @@ impl Client {
                     }
                 } else {
                     self.kill();
-                    self.invoke();
+                    if let Ok(_) = reqwest::get(&format!("{}/api/ready/{}", SERVER, &self.hostname))
+                    {
+                        self.invoke();
+                    }
                 }
             }
         }
