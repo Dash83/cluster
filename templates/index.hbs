@@ -23,9 +23,13 @@
 
       function change() {
         var url = encodeURIComponent(document.getElementById('url').value).trim();
-        if (url !== "") {
+        if (url != "") {
           window.location = '/api/repo/' + url;
         }
+      }
+
+      function restart() {
+        window.location = '/api/restart';
       }
 
       function update() {
@@ -157,6 +161,7 @@
       <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
       <button onclick="change()">change</button>
     </form>
+    <button onclick="restart()">restart</button>
     <br>
     <h2>{{name}}</h2>
     <div class="split">

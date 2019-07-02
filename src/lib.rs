@@ -18,6 +18,8 @@ pub struct Experiment {
     name: String,
     #[serde(skip_deserializing)]
     url: String,
+    #[serde(skip)]
+    restarted: bool,
     command: Option<String>,
     args: Option<Vec<String>>,
     hosts: HashMap<String, Host>,
@@ -67,6 +69,17 @@ impl Experiment {
             }
         }
         status
+    }
+
+    pub fn restart(&mut self) {
+        self.restarted = true;
+        for (_, host) in self.hosts.iter_mut() {
+            host.running = false;
+        }
+    }
+
+    pub fn restarted(&self) -> bool {
+        self.restarted
     }
 
     pub fn gen_command(&self) -> Option<Command> {

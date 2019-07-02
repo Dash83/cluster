@@ -74,6 +74,12 @@ fn update(
     Redirect::to(uri!(index))
 }
 
+#[get("/restart")]
+fn restart(experiment: State<'_, Mutex<Experiment>>) -> Redirect {
+    experiment.lock().unwrap().restart();
+    Redirect::to(uri!(index))
+}
+
 #[get("/status")]
 fn status(experiment: State<'_, Mutex<Experiment>>) -> JsonValue {
     json!({
@@ -91,12 +97,14 @@ fn host_status(hostname: String, experiment: State<'_, Mutex<Experiment>>) -> Js
             "url": experiment.url(),
             "host": hostname,
             "running": host.running().to_string(),
+            "restarted": experiment.restarted().to_string(),
         })
     } else {
         json!({
             "status": "ok",
             "url": experiment.url(),
             "host": hostname,
+            "restarted": experiment.restarted().to_string(),
         })
     }
 }
@@ -118,7 +126,15 @@ fn main() {
         .mount("/", routes![index])
         .mount(
             "/api/",
-            routes![ready, get_repo, set_repo, update, status, host_status],
+            routes![
+                ready,
+                get_repo,
+                set_repo,
+                update,
+                status,
+                host_status,
+                restart
+            ],
         )
         .attach(Template::fairing())
         .launch();

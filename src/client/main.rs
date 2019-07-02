@@ -55,18 +55,25 @@ impl Client {
                 .map(|x| x.parse::<bool>().unwrap_or(true))
                 .unwrap_or(true);
             if !running {
+                let restarted = response.get("restarted").unwrap().parse::<bool>().unwrap();
                 self.kill();
-                let url = response.get("url").unwrap();
-                fs::remove_dir_all(cluster::PATH).unwrap_or(());
-                if let Ok(_) = Repository::clone(url, cluster::PATH) {
-                    if let Ok(_) = reqwest::get(&format!("{}/api/ready/{}", SERVER, &self.hostname))
-                    {
+                if !restarted {
+                    let url = response.get("url").unwrap();
+                    fs::remove_dir_all(cluster::PATH).unwrap_or(());
+                    if let Ok(_) = Repository::clone(url, cluster::PATH) {
+                        if let Ok(_) =
+                            reqwest::get(&format!("{}/api/ready/{}", SERVER, &self.hostname))
                         {
-                            *self.experiment.lock().unwrap() =
-                                Experiment::load(cluster::experiment_path(), url).unwrap();
+                            {
+                                *self.experiment.lock().unwrap() =
+                                    Experiment::load(cluster::experiment_path(), url).unwrap();
+                            }
+                            self.invoke();
                         }
-                        self.invoke();
                     }
+                } else {
+                    self.kill();
+                    self.invoke();
                 }
             }
         }
