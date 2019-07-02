@@ -3,14 +3,16 @@ extern crate gethostname;
 extern crate git2;
 extern crate reqwest;
 extern crate serde;
+extern crate shared_child;
 extern crate toml;
 
 use cluster::Experiment;
 
 use git2::Repository;
 
+use shared_child::SharedChild;
+
 use std::collections::HashMap;
-use std::process::Child;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread, time};
 
@@ -18,16 +20,16 @@ const SERVER: &'static str = "http://localhost:8000";
 
 struct Client {
     hostname: String,
-    child: Arc<Mutex<Option<Child>>>,
     experiment: Arc<Mutex<Experiment>>,
+    to_kill: Arc<Mutex<Option<Arc<SharedChild>>>>,
 }
 
 impl Client {
     fn new() -> Client {
         Client {
             hostname: gethostname::gethostname().into_string().unwrap(),
-            child: Arc::new(Mutex::new(None)),
             experiment: Arc::new(Mutex::new(Default::default())),
+            to_kill: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -58,29 +60,48 @@ impl Client {
     }
 
     fn kill(&self) {
-        if let Some(ref mut child) = *self.child.lock().unwrap() {
-            match child.kill() {
-                Ok(_) => {}
-                Err(_) => panic!("couldn't kill child"),
-            }
+        dbg!();
+        if let Some(ref child) = *self.to_kill.lock().unwrap() {
+            dbg!();
+            child.kill().unwrap();
         }
     }
 
     fn invoke(&self) {
         let hostname = self.hostname.clone();
-        let child = Arc::clone(&self.child);
         let experiment = Arc::clone(&self.experiment);
+        let to_kill = Arc::clone(&self.to_kill);
         thread::spawn(move || {
-            let handle = { experiment.lock().unwrap().run() };
-            if let Some(handle) = handle {
-                {
-                    *child.lock().unwrap() = Some(handle);
+            let command = { experiment.lock().unwrap().gen_command() };
+            if let Some(mut command) = command {
+                if let Ok(child) = SharedChild::spawn(&mut command) {
+                    let child = Arc::new(child);
+                    {
+                        *to_kill.lock().unwrap() = Some(Arc::clone(&child))
+                    }
+                    if let Err(_) = child.wait() {
+                        return;
+                    }
                 }
-                if let Some(ref mut handle) = *child.lock().unwrap() {
-                    handle.wait().unwrap();
+            }
+            let command = {
+                experiment
+                    .lock()
+                    .unwrap()
+                    .get(&hostname)
+                    .unwrap()
+                    .gen_command()
+            };
+            if let Some(mut command) = command {
+                if let Ok(child) = SharedChild::spawn(&mut command) {
+                    let child = Arc::new(child);
+                    {
+                        *to_kill.lock().unwrap() = Some(Arc::clone(&child))
+                    }
+                    if let Err(_) = child.wait() {
+                        return;
+                    }
                 }
-                *child.lock().unwrap() =
-                    { experiment.lock().unwrap().get(&hostname).unwrap().run() }
             }
         });
     }

@@ -7,7 +7,7 @@ use std::error::Error;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
-use std::process::{Child, Command};
+use std::process::Command;
 
 pub const PATH: &'static str = "experiment/";
 pub const DEFAULT: &'static str = "https://github.com/doctorn/cluster_example.git";
@@ -65,8 +65,8 @@ impl Experiment {
         status
     }
 
-    pub fn run(&self) -> Option<Child> {
-        run(&self.command, &self.args)
+    pub fn gen_command(&self) -> Option<Command> {
+        gen_command(&self.command, &self.args)
     }
 }
 
@@ -75,8 +75,8 @@ impl Host {
         self.running
     }
 
-    pub fn run(&self) -> Option<Child> {
-        run(&self.command, &self.args)
+    pub fn gen_command(&self) -> Option<Command> {
+        gen_command(&self.command, &self.args)
     }
 }
 
@@ -84,16 +84,16 @@ pub fn experiment_path() -> String {
     format!("{}{}", PATH, DEPLOYMENT)
 }
 
-fn run(command: &Option<String>, args: &Option<Vec<String>>) -> Option<Child> {
+fn gen_command(command: &Option<String>, args: &Option<Vec<String>>) -> Option<Command> {
     if let Some(ref command) = command {
-        let mut command = &mut Command::new(command);
+        let mut command = Command::new(command);
         command.current_dir(PATH);
         if let Some(ref args) = args {
             for arg in args.iter() {
-                command = command.arg(arg);
+                command.arg(arg);
             }
         }
-        command.spawn().ok()
+        Some(command)
     } else {
         None
     }

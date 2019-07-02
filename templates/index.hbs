@@ -172,7 +172,11 @@
       <div>
         <h3>hosts</h3>
         {{#each hosts}}
-          <p>{{@key}} (<span class="status" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)</p>
+          <p>{{@key}}
+            (<span class="status {{#if running}}{{running}}{{/if}}" id="{{@key}}">
+              {{#if running}}running{{else}}not running{{/if}}
+            </span>)
+          </p>
           <pre>
             {{command}}
             {{#each args as |arg|}}
