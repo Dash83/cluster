@@ -160,27 +160,32 @@
     <br>
     <h2>{{name}}</h2>
     <div class="split">
-      <div>
-        <h3>global setup</h3>
-        <pre>
-          {{command}}
-          {{#each args as |arg|}}
-            {{arg}}
-          {{/each}}
-        </pre>
-      </div>
-      <div>
-        <h3>hosts</h3>
-        {{#each hosts}}
-          <p>{{@key}}
-            (<span class="status {{#if running}}running{{/if}}" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)
-          </p>
+      {{#if command}}
+        <div>
+          <h3>global setup</h3>
           <pre>
             {{command}}
             {{#each args as |arg|}}
               {{arg}}
             {{/each}}
           </pre>
+        </div>
+      {{/if}}
+      <div>
+      <div>
+        <h3>hosts</h3>
+        {{#each hosts}}
+          <p>{{@key}}
+            (<span class="status {{#if running}}running{{/if}}" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)
+          </p>
+          {{#if command}}
+            <pre>
+              {{command}}
+              {{#each args as |arg|}}
+                {{arg}}
+              {{/each}}
+            </pre>
+          {{/if}}
         {{/each}}
       </div>
     </div>
