@@ -24,6 +24,7 @@ use std::{env, fs, thread, time};
 const SERVER: &'static str = "http://192.168.100.10:8000";
 
 struct Client {
+    initialised: bool,
     headless: bool,
     hostname: String,
     experiment: Arc<Mutex<Experiment>>,
@@ -33,6 +34,7 @@ struct Client {
 impl Client {
     fn new() -> Client {
         Client {
+            initialised: false,
             headless: false,
             hostname: gethostname::gethostname().into_string().unwrap(),
             experiment: Arc::new(Mutex::new(Default::default())),
@@ -57,7 +59,7 @@ impl Client {
             if !running {
                 let restarted = response.get("restarted").unwrap().parse::<bool>().unwrap();
                 self.kill();
-                if !restarted {
+                if !restarted || !self.initialised {
                     let url = response.get("url").unwrap();
                     fs::remove_dir_all(cluster::PATH).unwrap_or(());
                     if let Ok(_) = Repository::clone(url, cluster::PATH) {
@@ -67,6 +69,7 @@ impl Client {
                             {
                                 *self.experiment.lock().unwrap() =
                                     Experiment::load(cluster::experiment_path(), url).unwrap();
+                                self.initialised = true;
                             }
                             self.invoke();
                         }
