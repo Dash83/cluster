@@ -60,9 +60,7 @@ impl Client {
     }
 
     fn kill(&self) {
-        dbg!();
         if let Some(ref child) = *self.to_kill.lock().unwrap() {
-            dbg!();
             child.kill().unwrap();
         }
     }
