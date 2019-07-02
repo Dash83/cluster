@@ -1,3 +1,4 @@
+extern crate chrono;
 extern crate cluster;
 extern crate gethostname;
 extern crate git2;
@@ -6,6 +7,8 @@ extern crate serde;
 extern crate shared_child;
 extern crate toml;
 
+use chrono::Utc;
+
 use cluster::Experiment;
 
 use git2::Repository;
@@ -13,6 +16,8 @@ use git2::Repository;
 use shared_child::SharedChild;
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread, time};
 
@@ -66,12 +71,22 @@ impl Client {
     }
 
     fn invoke(&self) {
+        let now = Utc::now();
         let hostname = self.hostname.clone();
+        let log_name = format!(
+            "{}@{}-{:?}",
+            &hostname,
+            { self.experiment.lock().unwrap().name().to_string() },
+            now
+        );
         let experiment = Arc::clone(&self.experiment);
         let to_kill = Arc::clone(&self.to_kill);
         thread::spawn(move || {
             let command = { experiment.lock().unwrap().gen_command() };
             if let Some(mut command) = command {
+                let (out, err) = create_log_files(&log_name);
+                command.stdout(Stdio::from(out));
+                command.stderr(Stdio::from(err));
                 if let Ok(child) = SharedChild::spawn(&mut command) {
                     let child = Arc::new(child);
                     {
@@ -91,6 +106,9 @@ impl Client {
                     .gen_command()
             };
             if let Some(mut command) = command {
+                let (out, err) = create_log_files(&log_name);
+                command.stdout(Stdio::from(out));
+                command.stderr(Stdio::from(err));
                 if let Ok(child) = SharedChild::spawn(&mut command) {
                     let child = Arc::new(child);
                     {
@@ -103,6 +121,12 @@ impl Client {
             }
         });
     }
+}
+
+fn create_log_files(name: &str) -> (File, File) {
+    let out = File::create(format!("{}.stdout", name)).unwrap();
+    let err = File::create(format!("{}.stderr", name)).unwrap();
+    (out, err)
 }
 
 fn main() {

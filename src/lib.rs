@@ -45,6 +45,10 @@ impl Experiment {
         &self.url
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn get(&self, host: &str) -> Option<&Host> {
         self.hosts.get(host)
     }
