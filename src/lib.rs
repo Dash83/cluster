@@ -55,6 +55,10 @@ impl Experiment {
         self.hosts.get(host)
     }
 
+    pub fn get_mut(&mut self, host: &str) -> Option<&mut Host> {
+        self.hosts.get_mut(host)
+    }
+
     pub fn set_running(&mut self, host: &str, running: bool) {
         if let Some(mut host) = self.hosts.get_mut(host) {
             host.running = running

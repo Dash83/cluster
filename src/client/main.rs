@@ -5,53 +5,47 @@ extern crate git2;
 extern crate libc;
 extern crate reqwest;
 extern crate serde;
-extern crate shared_child;
 extern crate toml;
 
 use chrono::Utc;
 
-use cluster::Experiment;
+use cluster::{Experiment, Host};
 
 use git2::Repository;
 
-use shared_child::SharedChild;
+use nix::sys::signal;
+use nix::unistd::{fork, setpgid, ForkResult, Pid};
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::process::Stdio;
-use std::sync::{Arc, Mutex};
-use std::{env, fs, thread, time};
-
-const SERVER: &'static str = "http://192.168.100.10:8000";
+use std::path::Path;
+use std::process::{self, Command, Stdio};
+use std::{env, fs, mem, thread, time};
 
 struct Client {
-    initialised: bool,
     headless: bool,
     hostname: String,
-    experiment: Arc<Mutex<Experiment>>,
-    to_kill: Arc<Mutex<Option<Arc<SharedChild>>>>,
+    server: String,
+    experiment: Option<Experiment>,
+    executor: Option<Pid>,
 }
 
 impl Client {
-    fn new() -> Client {
+    fn new(server: &str) -> Client {
         Client {
-            initialised: false,
             headless: false,
             hostname: gethostname::gethostname().into_string().unwrap(),
-            experiment: Arc::new(Mutex::new(Default::default())),
-            to_kill: Arc::new(Mutex::new(None)),
+            server: server.to_string(),
+            experiment: None,
+            executor: None,
         }
     }
 
-    fn new_headless() -> Client {
-        let mut client = Client::new();
-        client.headless = true;
-        client
-    }
-
     fn poll(&mut self) {
-        if let Ok(mut response) = reqwest::get(&format!("{}/api/status/{}", SERVER, &self.hostname))
-        {
+        if let Ok(mut response) = reqwest::get(&format!(
+            "http://{}/api/status/{}",
+            self.server, self.hostname
+        )) {
             let response = response.json::<HashMap<String, String>>().unwrap();
             let running = response
                 .get("running")
@@ -60,25 +54,25 @@ impl Client {
             if !running {
                 let restarted = response.get("restarted").unwrap().parse::<bool>().unwrap();
                 self.kill();
-                if !restarted || !self.initialised {
+                if !restarted || self.experiment.is_none() {
                     let url = response.get("url").unwrap();
                     fs::remove_dir_all(cluster::PATH).unwrap_or(());
                     if let Ok(_) = Repository::clone(url, cluster::PATH) {
-                        if let Ok(_) =
-                            reqwest::get(&format!("{}/api/ready/{}", SERVER, &self.hostname))
-                        {
-                            {
-                                *self.experiment.lock().unwrap() =
-                                    Experiment::load(cluster::experiment_path(), url).unwrap();
-                                self.initialised = true;
-                            }
+                        if let Ok(_) = reqwest::get(&format!(
+                            "http://{}/api/ready/{}",
+                            self.server, self.hostname
+                        )) {
+                            self.experiment =
+                                Some(Experiment::load(cluster::experiment_path(), url).unwrap());
                             self.invoke();
                         }
                     }
                 } else {
                     self.kill();
-                    if let Ok(_) = reqwest::get(&format!("{}/api/ready/{}", SERVER, &self.hostname))
-                    {
+                    if let Ok(_) = reqwest::get(&format!(
+                        "http://{}/api/ready/{}",
+                        self.server, self.hostname
+                    )) {
                         self.invoke();
                     }
                 }
@@ -86,90 +80,133 @@ impl Client {
         }
     }
 
-    fn kill(&self) {
-        if let Some(ref child) = *self.to_kill.lock().unwrap() {
-            unsafe {
-                libc::kill(child.id() as libc::pid_t, -9);
+    fn kill(&mut self) {
+        let mut child = None;
+        mem::swap(&mut self.executor, &mut child);
+        if let Some(child) = child {
+            let child = Pid::from_raw(-child.as_raw());
+            match signal::kill(child, signal::SIGTERM) {
+                _ => {}
+            }
+            match signal::kill(child, signal::SIGKILL) {
+                _ => {}
             }
         }
     }
 
-    fn invoke(&self) {
-        let now = Utc::now();
-        let hostname = self.hostname.clone();
-        let log_name = format!(
-            "{}@{}-{:?}",
-            &hostname,
-            { self.experiment.lock().unwrap().name().to_string() },
-            now
-        );
-        let experiment = Arc::clone(&self.experiment);
-        let to_kill = Arc::clone(&self.to_kill);
-        let headless = self.headless;
-        thread::spawn(move || {
-            let command = { experiment.lock().unwrap().gen_command() };
-            if let Some(mut command) = command {
-                if headless {
-                    let (out, err) = create_log_files(&log_name);
-                    command.stdout(Stdio::from(out));
-                    command.stderr(Stdio::from(err));
-                }
-                if let Ok(child) = SharedChild::spawn(&mut command) {
-                    let child = Arc::new(child);
-                    {
-                        *to_kill.lock().unwrap() = Some(Arc::clone(&child))
+    fn invoke(&mut self) {
+        if let Some(ref experiment) = self.experiment {
+            let name = format!(
+                "{}@{}-{}",
+                self.hostname,
+                experiment.name(),
+                Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string()
+            );
+            match fork() {
+                Ok(ForkResult::Parent { child, .. }) => self.executor = Some(child),
+                Ok(ForkResult::Child) => {
+                    setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
+                    if let Some(ref mut experiment) = self.experiment {
+                        if !self.headless {
+                            if let Ok(_) = experiment.invoke::<File, File>((None, None)) {
+                                if let Ok(_) = experiment
+                                    .get_mut(&self.hostname)
+                                    .unwrap()
+                                    .invoke::<File, File>((None, None))
+                                {
+                                    process::exit(0);
+                                }
+                            }
+                        } else {
+                            if let Ok(_) = experiment.invoke_as(&name) {
+                                if let Ok(_) =
+                                    experiment.get_mut(&self.hostname).unwrap().invoke_as(&name)
+                                {
+                                    process::exit(0);
+                                }
+                            }
+                        }
                     }
-                    if let Err(_) = child.wait() {
-                        return;
-                    }
+                    process::exit(1);
                 }
+                Err(_) => {}
             }
-            let command = {
-                experiment
-                    .lock()
-                    .unwrap()
-                    .get(&hostname)
-                    .unwrap()
-                    .gen_command()
-            };
-            if let Some(mut command) = command {
-                if headless {
-                    let (out, err) = create_log_files(&log_name);
-                    command.stdout(Stdio::from(out));
-                    command.stderr(Stdio::from(err));
-                }
-                if let Ok(child) = SharedChild::spawn(&mut command) {
-                    let child = Arc::new(child);
-                    {
-                        *to_kill.lock().unwrap() = Some(Arc::clone(&child))
-                    }
-                    if let Err(_) = child.wait() {
-                        return;
-                    }
-                }
-            }
-        });
+        }
     }
 }
 
-fn create_log_files(name: &str) -> (File, File) {
-    let out = File::create(format!("{}.stdout", name)).unwrap();
-    let err = File::create(format!("{}.stderr", name)).unwrap();
-    (out, err)
+trait Invokable {
+    fn invoke<T, U>(&mut self, pipe: (Option<T>, Option<U>)) -> Result<(), ()>
+    where
+        T: Into<Stdio>,
+        U: Into<Stdio>;
+
+    fn invoke_as<P: AsRef<Path>>(&mut self, log: P) -> Result<(), ()> {
+        let out = File::create(log.as_ref().with_extension("stdout")).ok();
+        let err = File::create(log.as_ref().with_extension("stderr")).ok();
+        self.invoke((out, err))
+    }
+}
+
+impl Invokable for Command {
+    fn invoke<T, U>(&mut self, (out, err): (Option<T>, Option<U>)) -> Result<(), ()>
+    where
+        T: Into<Stdio>,
+        U: Into<Stdio>,
+    {
+        if let Some(out) = out {
+            self.stdout(out.into());
+        }
+        if let Some(err) = err {
+            self.stderr(err.into());
+        }
+        match self.status() {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
+    }
+}
+
+impl Invokable for Host {
+    fn invoke<T, U>(&mut self, (out, err): (Option<T>, Option<U>)) -> Result<(), ()>
+    where
+        T: Into<Stdio>,
+        U: Into<Stdio>,
+    {
+        if let Some(mut command) = self.gen_command() {
+            command.invoke((out, err))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Invokable for Experiment {
+    fn invoke<T, U>(&mut self, (out, err): (Option<T>, Option<U>)) -> Result<(), ()>
+    where
+        T: Into<Stdio>,
+        U: Into<Stdio>,
+    {
+        if let Some(mut command) = self.gen_command() {
+            command.invoke((out, err))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 fn main() {
     let mut headless = false;
+    let mut server = String::from("192.168.100.1:8000");
     for arg in env::args() {
         if arg == "--headless" {
             headless = true;
+        } else {
+            server = arg.to_string();
         }
     }
-    let mut client = if headless {
-        Client::new_headless()
-    } else {
-        Client::new()
-    };
+    let mut client = Client::new(&server);
+    client.headless = headless;
     loop {
         client.poll();
         thread::sleep(time::Duration::from_millis(500));
