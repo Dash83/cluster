@@ -206,7 +206,11 @@ fn main() {
     let client = Arc::new(Mutex::new(Client::new(&server, headless)));
     {
         let client = Arc::clone(&client);
-        ctrlc::set_handler(move || client.lock().unwrap().kill()).unwrap();
+        ctrlc::set_handler(move || {
+            client.lock().unwrap().kill();
+            process::exit(0);
+        })
+        .unwrap();
     }
     loop {
         thread::sleep(time::Duration::from_millis(500));
