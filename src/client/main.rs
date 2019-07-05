@@ -126,6 +126,12 @@ impl Client {
     }
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.kill()
+    }
+}
+
 trait Invokable {
     fn invoke<T, U>(&mut self, pipe: (Option<T>, Option<U>)) -> Result<(), ()>
     where
