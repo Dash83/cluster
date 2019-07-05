@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 use std::process::{self, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::{env, fs, mem, thread, time};
 
 struct Client {
@@ -22,9 +23,9 @@ struct Client {
 }
 
 impl Client {
-    fn new(server: &str) -> Client {
+    fn new(server: &str, headless: bool) -> Client {
         Client {
-            headless: false,
+            headless,
             hostname: gethostname::gethostname().into_string().unwrap(),
             server: server.to_string(),
             experiment: None,
@@ -202,10 +203,13 @@ fn main() {
             server = arg.to_string();
         }
     }
-    let mut client = Client::new(&server);
-    client.headless = headless;
+    let client = Arc::new(Mutex::new(Client::new(&server, headless)));
+    {
+        let client = Arc::clone(&client);
+        ctrlc::set_handler(move || client.lock().unwrap().kill()).unwrap();
+    }
     loop {
-        client.poll();
         thread::sleep(time::Duration::from_millis(500));
+        client.lock().unwrap().poll();
     }
 }
