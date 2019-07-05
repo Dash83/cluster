@@ -148,19 +148,23 @@
       #info {
         height: 32px;
       }
+
+      .bar {
+        max-width: 100%;
+      }
     </style>
   </head>
   <body>
     <h1>cluster</h1>
     <h3>v0.1.0</h3>
     <br><br>
-    <div id="info">
+    <div id="info" class="bar">
       cloned repository
       <a href="{{url}}">{{url}}</a>
       <button id="update" onclick="update()">update</button>
     </div>
     <br>
-    <div>
+    <div class="bar">
       <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
       <button onclick="change()">change</button>
     </div>
