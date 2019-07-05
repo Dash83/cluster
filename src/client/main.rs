@@ -1,12 +1,3 @@
-extern crate chrono;
-extern crate cluster;
-extern crate gethostname;
-extern crate git2;
-extern crate libc;
-extern crate reqwest;
-extern crate serde;
-extern crate toml;
-
 use chrono::Utc;
 
 use cluster::{Experiment, Host};

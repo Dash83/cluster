@@ -1,13 +1,9 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
-extern crate cluster;
-extern crate git2;
 #[macro_use]
 extern crate rocket;
 #[macro_use]
 extern crate rocket_contrib;
-extern crate serde;
-extern crate toml;
 
 use cluster::Experiment;
 
