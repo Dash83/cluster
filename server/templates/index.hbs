@@ -79,6 +79,10 @@
         margin: 0px; 
       }
 
+      code {
+        font-size: 16px;
+      }
+
       pre {
         padding: 10px;
         white-space: normal;
@@ -156,6 +160,10 @@
       #info {
         width: 100%;
       }
+    
+      .err {
+        color: #d84231; 
+      }
     </style>
   </head>
   <body>
@@ -163,49 +171,70 @@
     <h3>v0.1.0</h3>
     <br><br>
     <div class="bar">
-      <div id="info">
-        cloned repository
-        <a href="{{url}}">{{url}}</a>
-      </div>
-      <button id="update" onclick="update()">update</button>
+      {{#if url}}
+        <div id="info">
+          cloned repository
+          <a href="{{url}}">{{url}}</a>
+        </div>
+        <button id="update" onclick="update()">update</button>
+      {{else}}
+        <div id="info" class="err">
+          no repository successfully cloned
+        </div>
+      {{/if}}
     </div>
     <br>
     <div class="bar">
       <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
-      <button onclick="change()">change</button>
+      <button onclick="change()">clone</button>
     </div>
-    <br>
-    <button onclick="restart()">restart</button>
+    {{#if url}}
+      <br>
+      <button onclick="restart()">restart</button>
+    {{/if}}
     <br><br>
-    <h2>{{name}}</h2>
-    <div class="split">
-      {{#if command}}
-        <div>
-          <h3>global setup</h3>
-          <pre>
-            {{command}}
-            {{#each args as |arg|}}
-              {{arg}}
-            {{/each}}
-          </pre>
-        </div>
-      {{/if}}
-      <div>
-        <h3>hosts</h3>
-        {{#each hosts}}
-          <p>{{@key}}
-            (<span class="status {{#if running}}running{{/if}}" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)
-          </p>
-          {{#if command}}
+    {{#if url}}
+      <h2>{{name}}</h2>
+      <div class="split">
+        {{#if command}}
+          <div>
+            <h3>global setup</h3>
             <pre>
               {{command}}
               {{#each args as |arg|}}
                 {{arg}}
               {{/each}}
             </pre>
-          {{/if}}
-        {{/each}}
+          </div>
+        {{/if}}
+        <div>
+          <h3>hosts</h3>
+          {{#each hosts}}
+            <p>{{@key}}
+              (<span class="status {{#if running}}running{{/if}}" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)
+            </p>
+            {{#if command}}
+              <pre>
+                {{command}}
+                {{#each args as |arg|}}
+                  {{arg}}
+                {{/each}}
+              </pre>
+            {{/if}}
+          {{/each}}
+        </div>
       </div>
-    </div>
+    {{else}}
+      <div>
+        no repository cloned means one of the following:
+        <ul>
+          <li>you provided the URL of a repo that doesn't exist</li>
+          <li>you provided the URL of a repo with no <code>deployment.toml</code></li>
+          <li>you provided the URL of a repo with a broken <code>deployment.toml</code></li>
+          <li>you haven't cloned a repository yet</li>
+        </ul>
+        try entering the URL of a valid repository and clicking clone
+      </div>
+    {{/if}}
   </body>
 </html>
