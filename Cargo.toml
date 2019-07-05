@@ -4,26 +4,6 @@ version = "0.1.0"
 authors = ["Nathan Corbyn <me@nathancorbyn.com>"]
 edition = "2018"
 
-[[bin]]
-name = "cluster_server"
-path = "src/server/main.rs"
-
-[[bin]]
-name = "cluster_client"
-path = "src/client/main.rs"
-
 [dependencies]
-rocket = "0.4.2"
-git2 = "0.9.1"
 toml = "0.5.1"
 serde = { version = "1.0.94", features = ["derive"] }
-reqwest = "0.9.18"
-gethostname = "0.2.0"
-chrono = "0.4.7"
-libc = "0.2.58"
-nix = "0.14.1"
-
-[dependencies.rocket_contrib]
-version = "0.4.2"
-default-features = false
-features = ["handlebars_templates", "tera_templates", "json"]
