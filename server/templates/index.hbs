@@ -28,6 +28,14 @@
         }
       }
 
+      function clearLogs() {
+        if (confirm("are you sure you want to clear the logs?")) {
+          get("/api/logs/clear", (response) => {
+            refreshLogs();
+          });
+        }
+      }
+
       function restart() {
         window.location = '/api/restart';
       }
@@ -48,6 +56,24 @@
         });
       }
 
+      function refreshLogs() {
+        get("/api/logs", (response) => {
+          var logs = document.getElementById("logs");
+          if (response.entries.length != 0) {
+            logs.innerHTML = "";
+            for (entry of response.entries) {
+              var element = document.createElement("a");
+              element.setAttribute("href", "/logs/" + entry);
+              element.appendChild(document.createTextNode(entry));
+              logs.appendChild(element);
+              logs.appendChild(document.createElement("br"));
+            }
+          } else {
+            logs.innerHTML = "no logs to show";
+          }
+        });
+      }
+
       function checkRepo() {
         get("/api/repo", (response) => {
           if (response.url != repo) {
@@ -58,6 +84,7 @@
       }
 
       setInterval(refreshStatus, 500);
+      setInterval(refreshLogs, 500);
       setInterval(checkRepo, 500);
     </script>
     <style type="text/css">
@@ -114,9 +141,18 @@
         min-width: 70px;
       }
 
+      button.warn {
+        color: #d84231; 
+        border-color: #d84231; 
+      }
+
       button:hover {
         background-color: #1da1f2;
         color: white;
+      }
+
+      button.warn:hover {
+        background-color: #d84231; 
       }
 
       input[type="text"] {
@@ -136,6 +172,10 @@
       }
 
       .status.running {
+        color: #fcba04;
+      }
+        
+      .status.done {
         color: #78c42d; 
       }
 
@@ -158,7 +198,7 @@
         flex-direction: row;
       }
 
-      #info {
+      .info {
         width: 100%;
       }
     
@@ -173,13 +213,13 @@
     <br><br>
     <div class="bar">
       {{#if url}}
-        <div id="info">
+        <div class="info">
           cloned repository
           <a href="{{url}}">{{url}}</a>
         </div>
         <button id="update" onclick="update()">update</button>
       {{else}}
-        <div id="info" class="err">
+        <div class="info" class="err">
           no repository successfully cloned
         </div>
       {{/if}}
@@ -189,15 +229,14 @@
       <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
       <button onclick="change()">clone</button>
     </div>
-    {{#if url}}
-      <br>
-      <button onclick="restart()">restart</button>
-    {{/if}}
     <br><br>
     {{#if url}}
       <h2>{{name}}</h2>
       <br>
-      <p>logs are being read from <code>{{log_dir}}</code> on hosts</p>
+      <div class="bar">
+        <div class="info">logs are being written to <code>{{log_dir}}</code> on hosts</div>
+        <button onclick="restart()">restart</button>
+      </div>
       <div class="split">
         {{#if command}}
           <div>
@@ -240,5 +279,18 @@
         try entering the URL of a valid repository and clicking clone
       </div>
     {{/if}}
+    <br><br>
+    <div>
+      <h2>logs</h2>
+      <br>
+      <div id="logs">
+        no logs to show
+      </div>
+      <br>
+      <div class="bar">
+        <div class="info"><span class="err">warning</span>, this will delete all log files on the server</div>
+        <button id="clear" class="warn" onclick="clearLogs()">clear</button>
+      </div>
+    </div>
   </body>
 </html>

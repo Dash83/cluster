@@ -9,27 +9,48 @@ use cluster::Experiment;
 
 use git2::Repository;
 
+use multipart::server::Multipart;
+
+use rocket::data::{self, FromDataSimple};
 use rocket::response::Redirect;
-use rocket::State;
+use rocket::{Data, Outcome, Request, State};
 
 use rocket_contrib::json::JsonValue;
+use rocket_contrib::serve::StaticFiles;
 use rocket_contrib::templates::Template;
 
 use std::fs;
+use std::io::Cursor;
+use std::path::Path;
 use std::sync::Mutex;
 
-fn reclone(url: &str, experiment: State<'_, Mutex<Option<Experiment>>>) {
-    fs::remove_dir_all(cluster::PATH).unwrap_or(());
-    match Repository::clone(&url, cluster::PATH) {
-        Ok(_) => {
-            let mut experiment = experiment.lock().unwrap();
-            if let Ok(manifest) = Experiment::load(cluster::experiment_path(), &url) {
-                *experiment = Some(manifest)
-            } else {
-                *experiment = None
+const LOG_DIR: &str = "logs/";
+
+#[derive(Debug)]
+struct LogUpload(());
+
+impl FromDataSimple for LogUpload {
+    type Error = ();
+
+    fn from_data(request: &Request, data: Data) -> data::Outcome<Self, Self::Error> {
+        let ct = request.headers().get_one("Content-Type").unwrap();
+        let idx = ct.find("boundary=").unwrap();
+        let boundary = &ct[(idx + "boundary=".len())..];
+        let mut body = vec![];
+        data.stream_to(&mut body).unwrap();
+        let mut mp = Multipart::with_body(Cursor::new(body), boundary);
+        mp.foreach_entry(|mut entry| {
+            if &*entry.headers.name == "log" {
+                let filename = entry.headers.filename.unwrap();
+                let path = Path::new(&filename);
+                entry
+                    .data
+                    .save()
+                    .with_path(Path::new(LOG_DIR).join(path.file_name().unwrap()));
             }
-        }
-        _ => *experiment.lock().unwrap() = None,
+        })
+        .unwrap();
+        Outcome::Success(LogUpload(()))
     }
 }
 
@@ -122,9 +143,69 @@ fn host_status(hostname: String, experiment: State<'_, Mutex<Option<Experiment>>
     }
 }
 
+#[post("/upload", data = "<upload>")]
+#[allow(unused)]
+fn upload(upload: LogUpload) -> JsonValue {
+    json!({ "status": "ok" })
+}
+
+#[get("/logs")]
+fn logs() -> JsonValue {
+    let mut entries = vec![];
+    for entry in fs::read_dir(Path::new(LOG_DIR)).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if !path.is_dir() {
+            let name = path.file_name().unwrap().to_owned();
+            entries.push(name.to_string_lossy().into_owned());
+        }
+    }
+    json!({
+        "status": "ok",
+        "entries": entries,
+    })
+}
+
+#[get("/logs/clear")]
+fn clear_logs() -> JsonValue {
+    fs::remove_dir_all(Path::new(LOG_DIR)).unwrap();
+    fs::create_dir_all(LOG_DIR).unwrap();
+    json!({ "status": "ok" })
+}
+
+#[catch(404)]
+#[allow(unused)]
+fn not_found(request: &Request) -> JsonValue {
+    json!({ "status": "err" })
+}
+
+#[catch(500)]
+#[allow(unused)]
+fn internal_error(request: &Request) -> JsonValue {
+    json!({ "status": "err" })
+}
+
+fn reclone(url: &str, experiment: State<'_, Mutex<Option<Experiment>>>) {
+    fs::remove_dir_all(cluster::PATH).unwrap_or(());
+    match Repository::clone(&url, cluster::PATH) {
+        Ok(_) => {
+            let mut experiment = experiment.lock().unwrap();
+            if let Ok(manifest) = Experiment::load(cluster::experiment_path(), &url) {
+                *experiment = Some(manifest)
+            } else {
+                *experiment = None
+            }
+        }
+        _ => *experiment.lock().unwrap() = None,
+    }
+}
+
 fn main() {
+    fs::create_dir_all(LOG_DIR).unwrap();
     rocket::ignite()
         .manage::<Mutex<Option<Experiment>>>(Mutex::new(None))
+        .register(catchers![internal_error, not_found])
+        .mount("/logs", StaticFiles::from(LOG_DIR))
         .mount("/", routes![index])
         .mount(
             "/api/",
@@ -135,7 +216,10 @@ fn main() {
                 update,
                 status,
                 host_status,
-                restart
+                restart,
+                upload,
+                logs,
+                clear_logs,
             ],
         )
         .attach(Template::fairing())

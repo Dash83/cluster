@@ -2,10 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, fs};
 
 pub const PATH: &str = "experiment/";
 pub const DEPLOYMENT: &str = "deployment.toml";
@@ -21,7 +21,7 @@ pub struct Experiment {
     command: Option<String>,
     args: Option<Vec<String>>,
     hosts: HashMap<String, Host>,
-    #[serde(default = "default_log_dir")]
+    #[serde(default = "default_log_path")]
     log_dir: PathBuf,
     #[serde(default = "default_gen_logs")]
     gen_logs: bool,
@@ -42,7 +42,7 @@ impl Experiment {
         file.read_to_string(&mut contents)?;
         let mut experiment = toml::from_str::<Experiment>(&contents)?;
         experiment.url = url.to_string();
-        fs::create_dir_all(&experiment.log_dir)?;
+        fs::create_dir_all(&experiment.log_path())?;
         Ok(experiment)
     }
 
@@ -97,17 +97,18 @@ impl Experiment {
         gen_command(&self.command, &self.args)
     }
 
-    pub fn log_path(&self) -> &Path {
-        &self.log_dir
+    pub fn log_path(&self) -> PathBuf {
+        Path::new(PATH).join(&self.log_dir)
     }
 
     pub fn as_log_path<P: AsRef<Path>>(&self, log: P) -> PathBuf {
-        self.log_dir.join(log)
+        self.log_path().join(log)
     }
 
     pub fn clear_logs(&self) {
-        fs::remove_dir_all(&self.log_dir).unwrap_or(());
-        fs::create_dir_all(&self.log_dir).unwrap();
+        let path = self.log_path();
+        fs::remove_dir_all(&path).unwrap_or(());
+        fs::create_dir_all(&path).unwrap();
     }
 }
 
@@ -121,8 +122,8 @@ impl Host {
     }
 }
 
-pub fn experiment_path() -> String {
-    format!("{}{}", PATH, DEPLOYMENT)
+pub fn experiment_path() -> PathBuf {
+    format!("{}{}", PATH, DEPLOYMENT).into()
 }
 
 fn gen_command(command: &Option<String>, args: &Option<Vec<String>>) -> Option<Command> {
@@ -140,8 +141,8 @@ fn gen_command(command: &Option<String>, args: &Option<Vec<String>>) -> Option<C
     }
 }
 
-fn default_log_dir() -> PathBuf {
-    env::current_dir().unwrap().join(LOG_DIR_DEFAULT)
+fn default_log_path() -> PathBuf {
+    Path::new(PATH).join(LOG_DIR_DEFAULT)
 }
 
 fn default_gen_logs() -> bool {

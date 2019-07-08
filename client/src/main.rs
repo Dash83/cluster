@@ -10,6 +10,8 @@ use flate2::Compression;
 use nix::sys::signal;
 use nix::unistd::{fork, setpgid, ForkResult, Pid};
 
+use reqwest::multipart;
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -42,41 +44,45 @@ impl Client {
             self.server, self.hostname
         )) {
             let response = response.json::<HashMap<String, String>>().unwrap();
-            let running = response
+            match response
                 .get("running")
                 .map(|x| x.parse::<bool>().unwrap_or(true))
-                .unwrap_or(true);
-            if !running {
-                let restarted = response.get("restarted").unwrap().parse::<bool>().unwrap();
-                self.kill();
-                self.log = if !restarted || self.experiment.is_none() {
-                    let url = response.get("url").unwrap();
-                    fs::remove_dir_all(cluster::PATH).unwrap_or(());
-                    if let Ok(_) = Repository::clone(url, cluster::PATH) {
-                        if let Ok(_) = reqwest::get(&format!(
-                            "http://{}/api/ready/{}",
-                            self.server, self.hostname
-                        )) {
-                            self.experiment =
-                                Some(Experiment::load(cluster::experiment_path(), url).unwrap());
-                            self.invoke()
+            {
+                Some(false) => {
+                    let restarted = response.get("restarted").unwrap().parse::<bool>().unwrap();
+                    self.kill();
+                    self.log = if !restarted || self.experiment.is_none() {
+                        let url = response.get("url").unwrap();
+                        fs::remove_dir_all(cluster::PATH).unwrap_or(());
+                        if let Ok(_) = Repository::clone(url, cluster::PATH) {
+                            if let Ok(_) = reqwest::get(&format!(
+                                "http://{}/api/ready/{}",
+                                self.server, self.hostname
+                            )) {
+                                self.experiment = Some(
+                                    Experiment::load(cluster::experiment_path(), url).unwrap(),
+                                );
+                                self.invoke()
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
                     } else {
-                        None
-                    }
-                } else {
-                    self.kill();
-                    if let Ok(_) = reqwest::get(&format!(
-                        "http://{}/api/ready/{}",
-                        self.server, self.hostname
-                    )) {
-                        self.invoke()
-                    } else {
-                        None
-                    }
-                };
+                        self.kill();
+                        if let Ok(_) = reqwest::get(&format!(
+                            "http://{}/api/ready/{}",
+                            self.server, self.hostname
+                        )) {
+                            self.invoke()
+                        } else {
+                            None
+                        }
+                    };
+                }
+                Some(true) => {}
+                None => self.kill(),
             }
         }
     }
@@ -100,11 +106,23 @@ impl Client {
         if let Some(ref log) = log {
             if let Some(ref experiment) = self.experiment {
                 println!("compressing logs...");
-                let tar_gz = File::create(log.with_extension("tar.gz")).unwrap();
+                let path = log.with_extension("tar.gz");
+                let tar_gz = File::create(&path).unwrap();
                 let enc = GzEncoder::new(tar_gz, Compression::default());
                 let mut tar = tar::Builder::new(enc);
                 tar.append_dir_all(".", experiment.log_path()).unwrap();
                 println!("done");
+                println!("uploading logs...");
+                let form = multipart::Form::new()
+                    .file("log", &*log.with_extension("tar.gz").to_string_lossy())
+                    .unwrap();
+                reqwest::Client::new()
+                    .post(&format!("http://{}/api/upload", self.server))
+                    .multipart(form)
+                    .send()
+                    .unwrap();
+                println!("done");
+                fs::remove_file(path).unwrap_or(());
             }
         }
     }
