@@ -51,6 +51,7 @@
       function checkRepo() {
         get("/api/repo", (response) => {
           if (response.url != repo) {
+            repo = response.url;
             update(); 
           }
         });
@@ -195,6 +196,8 @@
     <br><br>
     {{#if url}}
       <h2>{{name}}</h2>
+      <br>
+      <p>logs are being read from <code>{{log_dir}}</code> on hosts</p>
       <div class="split">
         {{#if command}}
           <div>
@@ -231,6 +234,7 @@
           <li>you provided the URL of a repo that doesn't exist</li>
           <li>you provided the URL of a repo with no <code>deployment.toml</code></li>
           <li>you provided the URL of a repo with a broken <code>deployment.toml</code></li>
+          <li>you specified an invalid <code>log_dir</code></li>
           <li>you haven't cloned a repository yet</li>
         </ul>
         try entering the URL of a valid repository and clicking clone

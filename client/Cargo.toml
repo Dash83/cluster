@@ -13,3 +13,5 @@ libc = "0.2.58"
 gethostname = "0.2.0"
 cluster = { version = "0.1.0", path = "../" }
 reqwest = "0.9.18"
+tar = "0.4.26"
+flate2 = "1.0.9"

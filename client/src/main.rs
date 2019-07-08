@@ -4,32 +4,35 @@ use cluster::{Experiment, Host};
 
 use git2::Repository;
 
+use flate2::write::GzEncoder;
+use flate2::Compression;
+
 use nix::sys::signal;
 use nix::unistd::{fork, setpgid, ForkResult, Pid};
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{self, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::{env, fs, mem, thread, time};
 
 struct Client {
-    headless: bool,
     hostname: String,
     server: String,
     experiment: Option<Experiment>,
     executor: Option<Pid>,
+    log: Option<PathBuf>,
 }
 
 impl Client {
-    fn new(server: &str, headless: bool) -> Client {
+    fn new(server: &str) -> Client {
         Client {
-            headless,
             hostname: gethostname::gethostname().into_string().unwrap(),
             server: server.to_string(),
             experiment: None,
             executor: None,
+            log: None,
         }
     }
 
@@ -46,7 +49,7 @@ impl Client {
             if !running {
                 let restarted = response.get("restarted").unwrap().parse::<bool>().unwrap();
                 self.kill();
-                if !restarted || self.experiment.is_none() {
+                self.log = if !restarted || self.experiment.is_none() {
                     let url = response.get("url").unwrap();
                     fs::remove_dir_all(cluster::PATH).unwrap_or(());
                     if let Ok(_) = Repository::clone(url, cluster::PATH) {
@@ -56,8 +59,12 @@ impl Client {
                         )) {
                             self.experiment =
                                 Some(Experiment::load(cluster::experiment_path(), url).unwrap());
-                            self.invoke();
+                            self.invoke()
+                        } else {
+                            None
                         }
+                    } else {
+                        None
                     }
                 } else {
                     self.kill();
@@ -65,9 +72,11 @@ impl Client {
                         "http://{}/api/ready/{}",
                         self.server, self.hostname
                     )) {
-                        self.invoke();
+                        self.invoke()
+                    } else {
+                        None
                     }
-                }
+                };
             }
         }
     }
@@ -76,6 +85,7 @@ impl Client {
         let mut child = None;
         mem::swap(&mut self.executor, &mut child);
         if let Some(child) = child {
+            println!("killing child process...");
             let child = Pid::from_raw(-child.as_raw());
             match signal::kill(child, signal::SIGTERM) {
                 _ => {}
@@ -83,23 +93,38 @@ impl Client {
             match signal::kill(child, signal::SIGKILL) {
                 _ => {}
             }
+            println!("done");
+        }
+        let mut log = None;
+        mem::swap(&mut self.log, &mut log);
+        if let Some(ref log) = log {
+            if let Some(ref experiment) = self.experiment {
+                println!("compressing logs...");
+                let tar_gz = File::create(log.with_extension("tar.gz")).unwrap();
+                let enc = GzEncoder::new(tar_gz, Compression::default());
+                let mut tar = tar::Builder::new(enc);
+                tar.append_dir_all(".", experiment.log_path()).unwrap();
+                println!("done");
+            }
         }
     }
 
-    fn invoke(&mut self) {
+    fn invoke(&mut self) -> Option<PathBuf> {
         if let Some(ref experiment) = self.experiment {
+            experiment.clear_logs();
             let name = format!(
                 "{}@{}-{}",
                 self.hostname,
                 experiment.name(),
                 Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string()
             );
+            let path = experiment.as_log_path(&name);
             match fork() {
                 Ok(ForkResult::Parent { child, .. }) => self.executor = Some(child),
                 Ok(ForkResult::Child) => {
                     setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
                     if let Some(ref mut experiment) = self.experiment {
-                        if !self.headless {
+                        if !experiment.gen_logs() {
                             if let Ok(_) = experiment.invoke::<File, File>((None, None)) {
                                 if let Ok(_) = experiment
                                     .get_mut(&self.hostname)
@@ -110,9 +135,9 @@ impl Client {
                                 }
                             }
                         } else {
-                            if let Ok(_) = experiment.invoke_as(&name) {
+                            if let Ok(_) = experiment.invoke_as(&path) {
                                 if let Ok(_) =
-                                    experiment.get_mut(&self.hostname).unwrap().invoke_as(&name)
+                                    experiment.get_mut(&self.hostname).unwrap().invoke_as(&path)
                                 {
                                     process::exit(0);
                                 }
@@ -123,6 +148,9 @@ impl Client {
                 }
                 Err(_) => {}
             }
+            Some(name.into())
+        } else {
+            None
         }
     }
 }
@@ -194,16 +222,11 @@ impl Invokable for Experiment {
 }
 
 fn main() {
-    let mut headless = false;
     let mut server = String::from("192.168.100.1:8000");
     for arg in env::args() {
-        if arg == "--headless" {
-            headless = true;
-        } else {
-            server = arg.to_string();
-        }
+        server = arg.to_string();
     }
-    let client = Arc::new(Mutex::new(Client::new(&server, headless)));
+    let client = Arc::new(Mutex::new(Client::new(&server)));
     {
         let client = Arc::clone(&client);
         ctrlc::set_handler(move || {

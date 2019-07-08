@@ -1,5 +1,7 @@
 /target
 **/target
+**/logs
+*.tar.gz
 **/*.rs.bk
 Cargo.lock
 

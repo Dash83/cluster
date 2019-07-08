@@ -2,14 +2,14 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs;
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{env, fs};
 
-pub const PATH: &'static str = "experiment/";
-pub const DEFAULT: &'static str = "https://github.com/doctorn/cluster_example.git";
-pub const DEPLOYMENT: &'static str = "deployment.toml";
+pub const PATH: &str = "experiment/";
+pub const DEPLOYMENT: &str = "deployment.toml";
+const LOG_DIR_DEFAULT: &str = "logs/";
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Experiment {
@@ -21,6 +21,10 @@ pub struct Experiment {
     command: Option<String>,
     args: Option<Vec<String>>,
     hosts: HashMap<String, Host>,
+    #[serde(default = "default_log_dir")]
+    log_dir: PathBuf,
+    #[serde(default = "default_gen_logs")]
+    gen_logs: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -38,6 +42,7 @@ impl Experiment {
         file.read_to_string(&mut contents)?;
         let mut experiment = toml::from_str::<Experiment>(&contents)?;
         experiment.url = url.to_string();
+        fs::create_dir_all(&experiment.log_dir)?;
         Ok(experiment)
     }
 
@@ -47,6 +52,10 @@ impl Experiment {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn gen_logs(&self) -> bool {
+        self.gen_logs
     }
 
     pub fn get(&self, host: &str) -> Option<&Host> {
@@ -87,6 +96,19 @@ impl Experiment {
     pub fn gen_command(&self) -> Option<Command> {
         gen_command(&self.command, &self.args)
     }
+
+    pub fn log_path(&self) -> &Path {
+        &self.log_dir
+    }
+
+    pub fn as_log_path<P: AsRef<Path>>(&self, log: P) -> PathBuf {
+        self.log_dir.join(log)
+    }
+
+    pub fn clear_logs(&self) {
+        fs::remove_dir_all(&self.log_dir).unwrap_or(());
+        fs::create_dir_all(&self.log_dir).unwrap();
+    }
 }
 
 impl Host {
@@ -116,4 +138,12 @@ fn gen_command(command: &Option<String>, args: &Option<Vec<String>>) -> Option<C
     } else {
         None
     }
+}
+
+fn default_log_dir() -> PathBuf {
+    env::current_dir().unwrap().join(LOG_DIR_DEFAULT)
+}
+
+fn default_gen_logs() -> bool {
+    false
 }
