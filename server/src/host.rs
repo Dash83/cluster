@@ -24,24 +24,31 @@ pub struct Host {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "desc")]
 pub enum HostState {
     /// Host is registered, but not actively part of an invocation.
+    #[serde(rename = "idle")]
     Idle,
     /// Host is actively running an invocation.
-    Running(InvocationId),
+    #[serde(rename = "running")]
+    Running(#[serde(rename = "id")] InvocationId),
     /// Host attempted to execute an invocation, but could not do so successfully due to an error
     /// external to te invocation itself, or host successfully executed invocation, but entered a
     /// failure state while compressing or uploading logs. (Functionally equivalent to idle, but
     /// important for diagnostics.)
-    Errored(InvocationId),
+    #[serde(rename = "running")]
+    Errored(#[serde(rename = "id")] InvocationId),
     /// Host successfully executed an invocation (either to completion or to an error internal to the
     /// invocation) and is now compressing log files for the invocation.
-    Compressing(InvocationId),
+    #[serde(rename = "running")]
+    Compressing(#[serde(rename = "id")] InvocationId),
     /// Host successfully compressed log files an invocation and is now uploading them.
-    Uploading(InvocationId),
+    #[serde(rename = "running")]
+    Uploading(#[serde(rename = "id")] InvocationId),
     /// Host successfully executed an invocation to completion. (Functionally equivalent to idle,
     /// but important for diagnostics.)
-    Done(InvocationId),
+    #[serde(rename = "running")]
+    Done(#[serde(rename = "id")] InvocationId),
 }
 
 impl<'a> FromParam<'a> for HostId {
@@ -57,16 +64,10 @@ impl<'a> FromParam<'a> for HostId {
     }
 }
 
-impl HostId {
-    pub fn new() -> HostId {
-        HostId(Uuid::new_v4())
-    }
-}
-
 impl Host {
-    pub(crate) fn new(id: HostId, hostname: &str) -> Host {
+    pub(crate) fn new(hostname: &str) -> Host {
         Host {
-            id,
+            id: HostId(Uuid::new_v4()),
             hostname: hostname.to_string(),
             timestamp: time::Instant::now(),
             state: HostState::Idle,
