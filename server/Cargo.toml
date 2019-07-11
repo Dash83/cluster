@@ -9,6 +9,11 @@ git2 = "0.9.1"
 rocket = "0.4.2"
 cluster = { version = "0.1.0", path = "../" }
 multipart = "0.16.1"
+serde = { version = "1.0.94", features = ["derive"] }
+
+[dependencies.uuid]
+version = "0.7.4"
+features = ["serde", "v4"]
 
 [dependencies.rocket_contrib]
 version = "0.4.2"
