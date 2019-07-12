@@ -1,5 +1,6 @@
 var current = undefined;
 var viewing = undefined;
+var hosts = {};
 var invocations = {};
 
 let Host = class {
@@ -7,7 +8,7 @@ let Host = class {
     this.id = record.id;
     this.hostname = record.hostname;
     this.state = record.state.desc;
-    this.target = record.state.target;
+    this.target = record.state.id;
     this.listing = undefined;
   }
 
@@ -30,7 +31,12 @@ let Host = class {
     element.classList.add("state");
     element.classList.add(this.state);
     element.appendChild(document.createTextNode(this.state));
-    // TODO listener
+    if (this.target !== null) {
+      var target = this.target;
+      element.addEventListener("click", function() {
+        viewInvocation(target);
+      });
+    }
     return element;
   }
 
@@ -101,7 +107,10 @@ let Invocation = class {
     element.classList.add("popout");
     element.classList.add("button");
     element.appendChild(materialIcon("open_in_new"));
-    // TODO listener
+    var id = this.id;
+    element.addEventListener("click", function() {
+      viewInvocation(id);
+    });
     return element;
   }
 
@@ -132,7 +141,9 @@ let Invocation = class {
       this.listing.appendChild(this.makeName());
       this.listing.appendChild(this.makeUrl());
       this.listing.appendChild(this.makeCommit());
-      this.listing.appendChild(this.makeExpandButton());
+      if (!this.failed) {
+        this.listing.appendChild(this.makeExpandButton());
+      }
       this.listing.appendChild(this.makeTime());
       this.listing.appendChild(this.makeStatus());
       this.listing.setAttribute("uuid", this.id);
@@ -272,6 +283,7 @@ function updateHosts() {
     }
     for (record of response.hosts) {
       list.appendChild((new Host(record)).element);
+      hosts[record.hostname] = record;
     }
     var placeholder = document.getElementById("hosts_placeholder");
     if (list.children.length == 0) {
@@ -282,10 +294,115 @@ function updateHosts() {
   }, function(err) {});
 }
 
+function renderInvocation(invocation) {
+  document.getElementById("center_placeholder").classList.add("hidden");
+  var content = document.getElementById("content");
+  while (content.firstChild) {
+    content.removeChild(content.firstChild);
+  }
+  var name = document.createElement("h2");
+  name.appendChild(document.createTextNode(invocation.descriptor.name));
+  content.appendChild(name);
+  var start = document.createElement("div");
+  start.classList.add("time");
+  var time = document.createTextNode(formatDate(new Date(invocation.start)));
+  start.appendChild(time);
+  content.appendChild(start);
+  var id = document.createElement("div");
+  id.classList.add("id");
+  id.appendChild(document.createTextNode(invocation.id));
+  content.appendChild(id);
+  var repo = document.createElement("div");
+  repo.classList.add("repo");
+  var url = document.createElement("a");
+  url.classList.add("url");
+  url.setAttribute("href", invocation.url);
+  url.appendChild(document.createTextNode(invocation.url));
+  repo.appendChild(url);
+  var commit = document.createElement("div");
+  var hash = document.createElement("a");
+  hash.classList.add("commit");
+  hash.appendChild(document.createTextNode(invocation.commit));
+  commit.appendChild(hash);
+  repo.appendChild(commit);
+  content.appendChild(repo);
+  var reinvoke = document.createElement("a");
+  reinvoke.id = "reinvoke";
+  reinvoke.classList.add("text_button");
+  reinvoke.appendChild(document.createTextNode("reinvoke"));
+  reinvoke.addEventListener("click", function() {
+    get("/api/reinvoke/" + invocation.id, function(response) {
+      updateCurrent();
+      viewing = response.invocation.id;
+      renderInvocation(response.invocation);
+    }, function(err) {
+      // TODO toast or something
+    })
+  });
+  var setup = document.createElement("div");
+  setup.id = "setup";
+  if (invocation.descriptor.command !== null) {
+    var global = document.createElement("h3");
+    global.appendChild(document.createTextNode("global setup"));
+    setup.appendChild(global);
+    setup.appendChild(makeCommand(invocation.descriptor.command, invocation.descriptor.args));
+  }
+  var hosts = document.createElement("h3");
+  hosts.appendChild(document.createTextNode("hosts"));
+  setup.appendChild(hosts);
+  for (host in invocation.descriptor.hosts) {
+    var hostname = document.createElement("p");
+    hostname.classList.add("hostname");
+    hostname.appendChild(document.createTextNode(host));
+    setup.appendChild(hostname);
+    var record = invocation.descriptor.hosts[host];
+    if (record.command !== null) {
+      setup.appendChild(makeCommand(record.command, record.args)); 
+    }
+  }
+  content.appendChild(setup);
+  content.appendChild(reinvoke);
+}
+
+function makeCommand(command, args) {
+  for (arg of args) {
+    if (arg.includes(" ")) {
+      if (!arg.includes("\"")) {
+        arg = "\"" + arg + "\"";
+      } else {
+        arg = "\'" + arg + "\'";
+      }
+    }
+    command += " " + arg;
+  }
+  var element = document.createElement("pre");
+  element.appendChild(document.createTextNode(command));
+  return element;
+}
+
+function viewInvocation(id) {
+  get("/api/invocation/" + id, function(response) {
+    viewing = id;
+    renderInvocation(response.invocation);
+  }, function(err) {});
+}
+
 setInterval(updateCurrent, 500);
 setInterval(updateHosts, 500);
 
 document.addEventListener('DOMContentLoaded', function() {
   updateCurrent();
   updateHosts();
+  document.getElementById("invoke_button").addEventListener("click", function() {
+    var url = encodeURIComponent(document.getElementById('input').value).trim();
+    if (url.length > 0) {
+      document.getElementById('input').value = '';
+      get("/api/invoke/" + url, function(response) {
+        viewing = response.invocation.id;
+        renderInvocation(response.invocation);
+      }, function(err) {
+        // TODO toast or something
+      });
+    }
+  });
 }, false);
