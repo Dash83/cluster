@@ -101,14 +101,10 @@ impl Instance {
         thread::spawn(move || loop {
             thread::sleep(time::Duration::from_millis(200));
             let mut hosts = hosts.lock().unwrap();
-            let mut expired = vec![];
-            for (id, host) in hosts.iter() {
+            for (_, host) in hosts.iter_mut() {
                 if host.expired() {
-                    expired.push(*id);
+                    host.set_state(HostState::Disconnected)
                 }
-            }
-            for id in expired.into_iter() {
-                hosts.remove(&id);
             }
         });
         instance
@@ -140,6 +136,15 @@ impl Instance {
         }
     }
 
+    pub fn invocations<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut dyn Iterator<Item = &'_ mut Invocation>) -> T,
+    {
+        let mut invocations = self.invocations.lock().unwrap();
+        let iter = invocations.iter_mut();
+        f(&mut iter.map(|(_, invocation)| invocation))
+    }
+
     pub fn current_invocation(&self) -> Option<InvocationId> {
         match *self.invocation.lock().unwrap() {
             Some(ref invocation) => Some(*invocation),
@@ -149,9 +154,15 @@ impl Instance {
 
     pub fn register(&self, hostname: &str) -> Result<HostId, InstanceError> {
         let mut hosts = self.hosts.lock().unwrap();
-        for (_, host) in hosts.iter() {
+        for (id, host) in hosts.iter_mut() {
             if hostname == host.hostname() {
-                return Err(InstanceErrorKind::HostRegisterd.into());
+                return if host.state() != HostState::Disconnected {
+                    Err(InstanceErrorKind::HostRegisterd.into())
+                } else {
+                    host.refresh();
+                    host.set_state(HostState::Idle);
+                    Ok(*id)
+                };
             }
         }
         let host = Host::new(hostname);

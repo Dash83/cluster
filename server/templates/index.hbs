@@ -3,293 +3,40 @@
   <head>
     <title>cluster</title>
     <link href="https://fonts.googleapis.com/css?family=M+PLUS+Rounded+1c" rel="stylesheet">
-    <script type="text/javascript">
-      var repo = '{{{url}}}';
-
-      function get(url, callback) {
-        var xhttp = new XMLHttpRequest();
-        xhttp.open("GET", url);
-        xhttp.send();
-        xhttp.onreadystatechange = (e) => {
-          try {
-            var response = JSON.parse(xhttp.responseText);
-            if (response.status == "ok") {
-              delete response.status;
-              callback(response);
-            }
-          } catch (e) {}
-        }
-      }
-
-      function change() {
-        var url = encodeURIComponent(document.getElementById('url').value).trim();
-        if (url != "") {
-          window.location = '/api/repo/' + url;
-        }
-      }
-
-      function clearLogs() {
-        if (confirm("are you sure you want to clear the logs?")) {
-          get("/api/logs/clear", (response) => {
-            refreshLogs();
-          });
-        }
-      }
-
-      function restart() {
-        window.location = '/api/restart';
-      }
-
-      function update() {
-        window.location = '/api/update';
-      }
-
-      function refreshStatus() {
-        get("/api/status", (response) => {
-          for (running of response.hosts) {
-            var element = document.getElementById(running);
-            if (typeof(element) != 'undefined' && element != null) {
-              element.innerHTML = "running";
-              element.classList.add('running');
-            }
-          }
-        });
-      }
-
-      function refreshLogs() {
-        get("/api/logs", (response) => {
-          var logs = document.getElementById("logs");
-          if (response.entries.length != 0) {
-            logs.innerHTML = "";
-            for (entry of response.entries) {
-              var element = document.createElement("a");
-              element.setAttribute("href", "/logs/" + entry);
-              element.appendChild(document.createTextNode(entry));
-              logs.appendChild(element);
-              logs.appendChild(document.createElement("br"));
-            }
-          } else {
-            logs.innerHTML = "no logs to show";
-          }
-        });
-      }
-
-      function checkRepo() {
-        get("/api/repo", (response) => {
-          if (response.url != repo) {
-            repo = response.url;
-            update(); 
-          }
-        });
-      }
-
-      setInterval(refreshStatus, 500);
-      setInterval(refreshLogs, 500);
-      setInterval(checkRepo, 500);
-    </script>
-    <style type="text/css">
-      body {
-        font-family: 'M PLUS Rounded 1c', sans-serif;
-        padding: 15px;
-        min-width: 450px;
-      }
-
-      a {
-        color: #1da1f2; 
-        text-decoration: none;
-      }
-
-      a.visited {
-        color: #1da1f2; 
-      }
-
-      h1, h2, h3, p {
-        margin: 0px; 
-      }
-
-      code {
-        font-size: 16px;
-      }
-
-      pre {
-        padding: 10px;
-        white-space: normal;
-        background-color: #e9ebef;
-        border-radius: 5px;
-        counter-reset: line;
-      }
-      
-      form {
-        width: 100%; 
-        display: flex;
-        flex-direction: row;
-        margin: 0;
-      }
-
-      button {
-        -webkit-appearance: none;
-        cursor: pointer; 
-        font-family: 'M PLUS Rounded 1c', sans-serif;
-        font-size: 1em;
-        background-color: white;
-        border: 1px #1da1f2 solid;
-        color: #1da1f2;
-        border-radius: 5px;
-        transition: background-color 100ms, color 100ms;
-        padding: 3px 5px 3px 5px;
-        float: right;
-        min-width: 70px;
-      }
-
-      button.warn {
-        color: #d84231; 
-        border-color: #d84231; 
-      }
-
-      button:hover {
-        background-color: #1da1f2;
-        color: white;
-      }
-
-      button.warn:hover {
-        background-color: #d84231; 
-      }
-
-      input[type="text"] {
-        -webkit-appearance: none;
-        font-family: 'M PLUS Rounded 1c', sans-serif;
-        font-size: 1em; 
-        border-radius: 5px;
-        border: 1px #ddd solid;
-        padding: 3px 5px 3px 5px;
-        box-shadow: none;
-        width: 100%;
-        margin-right: 20px;
-      }
-
-      .status {
-        color: #d84231; 
-      }
-
-      .status.running {
-        color: #fcba04;
-      }
-        
-      .status.done {
-        color: #78c42d; 
-      }
-
-      .split {
-        display: flex;
-        flex-direction: row;
-        width: 100%;
-        height: 100%;
-      }
-
-      .split div {
-        margin: 10px; 
-        width: 100%;
-      }
-
-      .bar {
-        height: 32px;
-        max-width: 100%;
-        display: flex;
-        flex-direction: row;
-      }
-
-      .info {
-        width: 100%;
-      }
-    
-      .err {
-        color: #d84231; 
-      }
-    </style>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="/static/style/style.css" rel="stylesheet">
+    <script type="text/javascript" src="/static/script/cluster.js"></script>
   </head>
   <body>
-    <h1>cluster</h1>
-    <h3>v0.1.0</h3>
-    <br><br>
-    <div class="bar">
-      {{#if url}}
-        <div class="info">
-          cloned repository
-          <a href="{{url}}">{{url}}</a>
-        </div>
-        <button id="update" onclick="update()">update</button>
-      {{else}}
-        <div class="info" class="err">
-          no repository successfully cloned
-        </div>
-      {{/if}}
-    </div>
-    <br>
-    <div class="bar">
-      <input id="url" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
-      <button onclick="change()">clone</button>
-    </div>
-    <br><br>
-    {{#if url}}
-      <h2>{{name}}</h2>
-      <br>
-      <div class="bar">
-        <div class="info">logs are being written to <code>{{log_dir}}</code> on hosts</div>
-        <button onclick="restart()">restart</button>
-      </div>
-      <div class="split">
-        {{#if command}}
-          <div>
-            <h3>global setup</h3>
-            <pre>
-              {{command}}
-              {{#each args as |arg|}}
-                {{arg}}
-              {{/each}}
-            </pre>
+    <div id="split">
+      <div id="left">
+        <span class="subtitle">
+          <i class="label material-icons">code</i>
+          <h3>invocation</h3>
+        </span>
+        <div id="active">
+          <div class="invocation">
+            <p class="placeholder">no active invocation</p>
           </div>
-        {{/if}}
-        <div>
-          <h3>hosts</h3>
-          {{#each hosts}}
-            <p>{{@key}}
-              (<span class="status {{#if running}}running{{/if}}" id="{{@key}}">{{#if running}}running{{else}}not running{{/if}}</span>)
-            </p>
-            {{#if command}}
-              <pre>
-                {{command}}
-                {{#each args as |arg|}}
-                  {{arg}}
-                {{/each}}
-              </pre>
-            {{/if}}
-          {{/each}}
         </div>
+        <span class="subtitle">
+          <i class="label material-icons">history</i>
+          <h3>history</h3>
+        </span>
+        <p id="history_placeholder" class="placeholder"><br>no invocations to show</p>
+        <div id="invocations"></div>
       </div>
-    {{else}}
-      <div>
-        no repository cloned means one of the following:
-        <ul>
-          <li>you provided the URL of a repo that doesn't exist</li>
-          <li>you provided the URL of a repo with no <code>deployment.toml</code></li>
-          <li>you provided the URL of a repo with a broken <code>deployment.toml</code></li>
-          <li>you specified an invalid <code>log_dir</code></li>
-          <li>you haven't cloned a repository yet</li>
-        </ul>
-        try entering the URL of a valid repository and clicking clone
+      <div id="center">
+        <p id="center_placeholder" class="placeholder"><br>not viewing an invocation</p>
+        <div id="content"></div>
       </div>
-    {{/if}}
-    <br><br>
-    <div>
-      <h2>logs</h2>
-      <br>
-      <div id="logs">
-        no logs to show
-      </div>
-      <br>
-      <div class="bar">
-        <div class="info"><span class="err">warning</span>, this will delete all log files on the server</div>
-        <button id="clear" class="warn" onclick="clearLogs()">clear</button>
+      <div id="right">
+        <span class="subtitle">
+          <i class="label material-icons">memory</i>
+          <h3>hosts</h3>
+        </span>
+        <p id="hosts_placeholder" class="placeholder"><br>no hosts registered</p>
+        <div id="hosts"></div>
       </div>
     </div>
   </body>

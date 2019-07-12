@@ -26,6 +26,9 @@ pub struct Host {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "desc")]
 pub enum HostState {
+    /// Host was registered, but has now been assumed disconnected.
+    #[serde(rename = "disconnected")]
+    Disconnected,
     /// Host is registered, but not actively part of an invocation.
     #[serde(rename = "idle")]
     Idle,
@@ -36,18 +39,18 @@ pub enum HostState {
     /// external to te invocation itself, or host successfully executed invocation, but entered a
     /// failure state while compressing or uploading logs. (Functionally equivalent to idle, but
     /// important for diagnostics.)
-    #[serde(rename = "running")]
+    #[serde(rename = "errored")]
     Errored(#[serde(rename = "id")] InvocationId),
     /// Host successfully executed an invocation (either to completion or to an error internal to the
     /// invocation) and is now compressing log files for the invocation.
-    #[serde(rename = "running")]
+    #[serde(rename = "compressing")]
     Compressing(#[serde(rename = "id")] InvocationId),
     /// Host successfully compressed log files an invocation and is now uploading them.
-    #[serde(rename = "running")]
+    #[serde(rename = "uploading")]
     Uploading(#[serde(rename = "id")] InvocationId),
     /// Host successfully executed an invocation to completion. (Functionally equivalent to idle,
     /// but important for diagnostics.)
-    #[serde(rename = "running")]
+    #[serde(rename = "done")]
     Done(#[serde(rename = "id")] InvocationId),
 }
 

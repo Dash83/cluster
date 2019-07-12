@@ -139,19 +139,40 @@ mod host {
     }
 }
 
+#[get("/")]
+fn index() -> Template {
+    Template::render("index", {})
+}
+
 #[get("/hosts")]
 fn hosts(instance: State<Instance>) -> JsonValue {
     instance.hosts(|iter| ok!("hosts", iter.collect::<Vec<_>>()))
 }
 
-#[get("/invocation")]
-fn invocation(instance: State<Instance>) -> JsonValue {
-    match instance.current_invocation() {
-        Some(id) => instance
-            .invocation(id, |invocation| ok!("invocation", invocation))
-            .unwrap_or(err!()),
-        _ => err!(),
-    }
+#[get("/current")]
+fn current(instance: State<Instance>) -> JsonValue {
+    instance
+        .current_invocation()
+        .map(|id| ok!("id", id))
+        .unwrap_or(err!())
+}
+
+#[get("/invocation/<id>")]
+fn invocation(id: InvocationId, instance: State<Instance>) -> JsonValue {
+    instance
+        .invocation(id, |invocation| ok!("invocation", invocation))
+        .unwrap_or(err!())
+}
+
+#[get("/invocations")]
+fn invocations(instance: State<Instance>) -> JsonValue {
+    instance.invocations(|iter| {
+        ok!(
+            "invocations",
+            iter.map(|invocation| invocation.record())
+                .collect::<Vec<_>>()
+        )
+    })
 }
 
 #[get("/invoke/<url>")]
@@ -175,15 +196,13 @@ fn reinvoke(id: InvocationId, instance: State<Instance>) -> JsonValue {
 }
 
 #[catch(404)]
-#[allow(unused)]
-fn not_found(request: &Request) -> JsonValue {
-    err!()
+fn not_found(_request: &Request) -> JsonValue {
+    err!("page not found")
 }
 
 #[catch(500)]
-#[allow(unused)]
-fn internal_error(request: &Request) -> JsonValue {
-    err!()
+fn internal_error(_request: &Request) -> JsonValue {
+    err!("internal server error")
 }
 
 fn main() {
@@ -191,7 +210,11 @@ fn main() {
         .manage(Instance::new("experiment/"))
         .register(catchers![internal_error, not_found])
         .mount("/static", StaticFiles::from("static/"))
-        .mount("/api", routes![hosts, invoke, reinvoke])
+        .mount("/", routes![index])
+        .mount(
+            "/api",
+            routes![hosts, current, invocation, invocations, invoke, reinvoke],
+        )
         .mount("/api/host", routes![host::host, host::register])
         .mount(
             "/api/host/status",

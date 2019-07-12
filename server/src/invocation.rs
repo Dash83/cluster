@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 use cluster::{ExperimentDescriptor, ExperimentParseError};
 
 use rocket::http::RawStr;
@@ -18,7 +20,17 @@ pub struct Invocation {
     url: String,
     commit: String,
     descriptor: Option<ExperimentDescriptor>,
+    start: DateTime<Utc>,
     logs: Vec<PathBuf>,
+}
+
+#[derive(Serialize)]
+pub struct InvocationRecord {
+    id: InvocationId,
+    url: String,
+    name: Option<String>,
+    commit: String,
+    start: DateTime<Utc>,
 }
 
 impl<'a> FromParam<'a> for InvocationId {
@@ -51,6 +63,7 @@ impl Invocation {
                 url: url.to_string(),
                 commit: commit.to_string(),
                 descriptor: descriptor,
+                start: Utc::now(),
                 logs: vec![],
             },
             err,
@@ -67,5 +80,19 @@ impl Invocation {
 
     pub fn commit(&self) -> &str {
         &self.commit
+    }
+
+    pub fn record(&self) -> InvocationRecord {
+        InvocationRecord {
+            id: self.id,
+            url: self.url.to_string(),
+            name: if let Some(ref descriptor) = self.descriptor {
+                Some(descriptor.name().to_string())
+            } else {
+                None
+            },
+            commit: self.commit.to_string(),
+            start: self.start,
+        }
     }
 }
