@@ -2,6 +2,7 @@ var current = undefined;
 var viewing = undefined;
 var hosts = {};
 var invocations = {};
+var hostStates = {};
 
 let Host = class {
   constructor(record) {
@@ -284,6 +285,7 @@ function updateHosts() {
     for (record of response.hosts) {
       list.appendChild((new Host(record)).element);
       hosts[record.hostname] = record;
+      updateHostState(record.hostname);
     }
     var placeholder = document.getElementById("hosts_placeholder");
     if (list.children.length == 0) {
@@ -294,7 +296,34 @@ function updateHosts() {
   }, function(err) {});
 }
 
+function updateHostState(host) {
+  if (host in hostStates) {
+    var element = hostStates[host];
+    while (element.firstChild) {
+      element.removeChild(element.firstChild);
+    }
+    element.classList = [];
+    element.classList.add("state");
+    if (host in hosts) {
+      if (hosts[host].state.id === viewing) {
+        element.classList.add(hosts[host].state.desc);
+        element.appendChild(document.createTextNode(hosts[host].state.desc));
+      } else if (!('id' in hosts[host].state)) {
+        element.classList.add(hosts[host].state.desc);
+        element.appendChild(document.createTextNode(hosts[host].state.desc));
+      } else {
+        element.classList.add("busy");
+        element.appendChild(document.createTextNode("busy"));
+      }
+    } else {
+      element.classList.add("disconnected");
+      element.appendChild(document.createTextNode("disconnected"));
+    }
+  }
+}
+
 function renderInvocation(invocation) {
+  hostStates = {};
   document.getElementById("center_placeholder").classList.add("hidden");
   var content = document.getElementById("content");
   while (content.firstChild) {
@@ -347,19 +376,34 @@ function renderInvocation(invocation) {
     setup.appendChild(global);
     setup.appendChild(makeCommand(invocation.descriptor.command, invocation.descriptor.args));
   }
-  var hosts = document.createElement("h3");
-  hosts.appendChild(document.createTextNode("hosts"));
-  setup.appendChild(hosts);
+  var hostHeader = document.createElement("h3");
+  hostHeader.appendChild(document.createTextNode("hosts"));
+  setup.appendChild(hostHeader);
   for (host in invocation.descriptor.hosts) {
     var hostname = document.createElement("p");
     hostname.classList.add("hostname");
     hostname.appendChild(document.createTextNode(host));
+    var state = document.createElement("span");
+    hostStates[host] = state;
+    updateHostState(host);
+    hostname.appendChild(state);
     setup.appendChild(hostname);
     var record = invocation.descriptor.hosts[host];
     if (record.command !== null) {
       setup.appendChild(makeCommand(record.command, record.args)); 
     }
   }
+  if (invocation.descriptor.gen_logs) {
+    var note = document.createElement("p");
+    note.appendChild(document.createTextNode("logs files will be generated from standard output"));
+    setup.appendChild(note);
+  }
+  var logDir = document.createElement("p");
+  logDir.appendChild(document.createTextNode("log files on hosts will be uploaded from "));
+  var dir = document.createElement("code");
+  dir.appendChild(document.createTextNode(invocation.descriptor.log_dir));
+  logDir.appendChild(dir);
+  setup.appendChild(logDir);
   content.appendChild(setup);
   content.appendChild(reinvoke);
 }

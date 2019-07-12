@@ -101,7 +101,7 @@ input[type="text"] {
   height: 100%;
   overflow: hidden;
   width: calc(100% - 620px);
-  padding-top: 10px;
+  padding: 10px;
   box-sizing: border-box;
   min-width: 340px;
 }
@@ -285,6 +285,10 @@ input[type="text"] {
   cursor: default;
 }
 
+.state.busy {
+  color: #AAA;
+}
+
 .state.idle {
   color: #fe8019;
   cursor: default;
@@ -343,4 +347,12 @@ input[type="text"] {
 
 #setup {
   margin-top: 15px;
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  border-radius: 5px;
+}
+
+.hostname .state {
+  float: right;
+  margin-right: 5px;
 }
