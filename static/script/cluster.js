@@ -164,7 +164,11 @@ function get(url, callback, err) {
     } catch (e) { return; }
     if (response.status == "ok") {
       delete response.status;
-      callback(response);
+      if ('payload' in response) {
+        callback(response.payload);
+      } else {
+        callback();
+      }
     } else {
       if (!('msg' in response)) {
         response.msg = "an error occured";
@@ -211,9 +215,9 @@ function makeEmpty() {
 
 function updateCurrent() {
   var active = document.getElementById("active");
-  get("/api/current", function(response) {
-    if (current !== response.id) {
-      current = response.id;
+  get("/api/current", function(id) {
+    if (current !== id) {
+      current = id;
       updateInvocations(function() {
         while (active.firstChild) {
           active.removeChild(active.firstChild);
@@ -236,13 +240,13 @@ function updateCurrent() {
 
 function updateInvocations(callback) {
   get("/api/invocations", function(response) {
-    for (record of response.invocations) {
+    for (record of response) {
       if (!(record.id in invocations)) {
         invocations[record.id] = new Invocation(record);
       }
     }
     for (id in invocations) {
-      var index = response.invocations.findIndex(function(record) {
+      var index = response.findIndex(function(record) {
         return record.id == id;
       });
       if (index === -1) {
@@ -282,7 +286,7 @@ function updateHosts() {
     while (list.firstChild) {
       list.removeChild(list.firstChild);
     }
-    for (record of response.hosts) {
+    for (record of response) {
       list.appendChild((new Host(record)).element);
       hosts[record.hostname] = record;
       updateHostState(record.hostname);
@@ -362,8 +366,8 @@ function renderInvocation(invocation) {
   reinvoke.addEventListener("click", function() {
     get("/api/reinvoke/" + invocation.id, function(response) {
       updateCurrent();
-      viewing = response.invocation.id;
-      renderInvocation(response.invocation);
+      viewing = response.id;
+      renderInvocation(response);
     }, function(err) {
       // TODO toast or something
     })
@@ -427,7 +431,7 @@ function makeCommand(command, args) {
 function viewInvocation(id) {
   get("/api/invocation/" + id, function(response) {
     viewing = id;
-    renderInvocation(response.invocation);
+    renderInvocation(response);
   }, function(err) {});
 }
 
@@ -442,8 +446,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (url.length > 0) {
       document.getElementById('input').value = '';
       get("/api/invoke/" + url, function(response) {
-        viewing = response.invocation.id;
-        renderInvocation(response.invocation);
+        viewing = response.id;
+        renderInvocation(response);
       }, function(err) {
         // TODO toast or something
       });

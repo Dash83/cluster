@@ -5,9 +5,11 @@ extern crate rocket;
 #[macro_use]
 extern crate rocket_contrib;
 
-use cluster_server::host::{HostId, HostState};
-use cluster_server::invocation::InvocationId;
-use cluster_server::Instance;
+mod instance;
+
+use cluster::host::{HostId, HostState};
+use cluster::invocation::InvocationId;
+use instance::Instance;
 
 use rocket::Request;
 use rocket::State;
@@ -24,12 +26,6 @@ macro_rules! ok {
         json!({
             "status": "ok",
             "payload": $val,
-        })
-    };
-    ($key:expr, $val:expr) => {
-        json!({
-            "status": "ok",
-            $key: $val,
         })
     };
 }
@@ -59,9 +55,7 @@ mod host {
 
     #[get("/<id>")]
     pub fn host(id: HostId, instance: State<Instance>) -> JsonValue {
-        instance
-            .host(id, |host| ok!("host", host))
-            .unwrap_or(err!())
+        instance.host(id, |host| ok!(host)).unwrap_or(err!())
     }
 
     pub mod status {
@@ -130,32 +124,30 @@ fn index() -> Template {
 
 #[get("/hosts")]
 fn hosts(instance: State<Instance>) -> JsonValue {
-    instance.hosts(|iter| ok!("hosts", iter.collect::<Vec<_>>()))
+    instance.hosts(|iter| ok!(iter.collect::<Vec<_>>()))
 }
 
 #[get("/current")]
 fn current(instance: State<Instance>) -> JsonValue {
     instance
         .current_invocation()
-        .map(|id| ok!("id", id))
+        .map(|id| ok!(id))
         .unwrap_or(err!())
 }
 
 #[get("/invocation/<id>")]
 fn invocation(id: InvocationId, instance: State<Instance>) -> JsonValue {
     instance
-        .invocation(id, |invocation| ok!("invocation", invocation))
+        .invocation(id, |invocation| ok!(invocation))
         .unwrap_or(err!())
 }
 
 #[get("/invocations")]
 fn invocations(instance: State<Instance>) -> JsonValue {
     instance.invocations(|iter| {
-        ok!(
-            "invocations",
-            iter.map(|invocation| invocation.record())
-                .collect::<Vec<_>>()
-        )
+        ok!(iter
+            .map(|invocation| invocation.record())
+            .collect::<Vec<_>>())
     })
 }
 
@@ -163,7 +155,7 @@ fn invocations(instance: State<Instance>) -> JsonValue {
 fn invoke(url: String, instance: State<Instance>) -> JsonValue {
     match instance.invoke(&url) {
         Ok(id) => instance
-            .invocation(id, |invocation| ok!("invocation", invocation))
+            .invocation(id, |invocation| ok!(invocation))
             .unwrap_or(err!()),
         Err(err) => err!(err),
     }
@@ -173,7 +165,7 @@ fn invoke(url: String, instance: State<Instance>) -> JsonValue {
 fn reinvoke(id: InvocationId, instance: State<Instance>) -> JsonValue {
     match instance.reinvoke(id) {
         Ok(id) => instance
-            .invocation(id, |invocation| ok!("invocation", invocation))
+            .invocation(id, |invocation| ok!(invocation))
             .unwrap_or(err!()),
         Err(err) => err!(err),
     }

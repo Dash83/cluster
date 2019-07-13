@@ -4,7 +4,33 @@ version = "0.2.0"
 authors = ["Nathan Corbyn <me@nathancorbyn.com>"]
 edition = "2018"
 
+[[bin]]
+name = "cluster"
+path = "src/server/main.rs"
+
+[[bin]]
+name = "clusterc"
+path = "src/client/main.rs"
+
 [dependencies]
-toml = "0.5.1"
+git2 = "0.9.1"
+rocket = "0.4.2"
+multipart = "0.16.1"
 serde = { version = "1.0.94", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "0.7.4", features = ["serde", "v4"] }
 lazy_static = "1.3.0"
+toml = "0.5.1"
+ctrlc = "3.1.3"
+nix = "0.14.1"
+libc = "0.2.58"
+gethostname = "0.2.0"
+reqwest = "0.9.18"
+tar = "0.4.26"
+flate2 = "1.0.9"
+clap = "2.33.0"
+
+[dependencies.rocket_contrib]
+version = "0.4.2"
+default-features = false
+features = ["handlebars_templates", "tera_templates", "json", "serve"]

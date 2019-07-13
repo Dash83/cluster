@@ -1,20 +1,21 @@
 use chrono::{DateTime, Utc};
 
-use cluster::{ExperimentDescriptor, ExperimentParseError};
+use crate::descriptor::{ExperimentDescriptor, ExperimentParseError};
 
 use rocket::http::RawStr;
 use rocket::request::FromParam;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InvocationId(Uuid);
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Invocation {
     id: InvocationId,
     url: String,
@@ -24,7 +25,7 @@ pub struct Invocation {
     logs: Vec<PathBuf>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct InvocationRecord {
     id: InvocationId,
     url: String,
@@ -47,7 +48,7 @@ impl<'a> FromParam<'a> for InvocationId {
 }
 
 impl Invocation {
-    pub(crate) fn new<P: AsRef<Path>>(
+    pub fn new<P: AsRef<Path>>(
         url: &str,
         commit: &str,
         path: P,
@@ -94,5 +95,11 @@ impl Invocation {
             commit: self.commit.to_string(),
             start: self.start,
         }
+    }
+}
+
+impl fmt::Display for InvocationId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

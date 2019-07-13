@@ -1,17 +1,13 @@
-use git2::build::CheckoutBuilder;
-use git2::{ObjectType, Oid, Repository, ResetType};
+use cluster::host::*;
+use cluster::invocation::*;
+
+use git2::Repository;
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::{fmt, fs, thread, time};
-
-pub mod host;
-pub mod invocation;
-
-use self::host::*;
-use self::invocation::*;
 
 pub struct Instance {
     hosts: Arc<Mutex<HashMap<HostId, Host>>>,
@@ -37,7 +33,6 @@ pub enum InstanceErrorKind {
     /// There was a failure while attempting to clone the repository.
     CloningFailed,
     /// The cloned repository has commits missing (i.e. previously valid references are no longer
-    /// valid, or no references could be found).
     MissingCommits,
     /// The supplied invocation or host ID was invalid.
     InvalidId,
@@ -191,19 +186,10 @@ impl Instance {
             _ => return Err(InstanceErrorKind::InvalidId.into()),
         };
         let repo = self.clone(&url)?;
-        let object = commit
-            .parse::<Oid>()
-            .and_then(|oid| repo.find_object(oid, Some(ObjectType::Commit)))
-            .map_err(|err| InstanceError {
-                cause: Some(Box::new(err)),
-                kind: InstanceErrorKind::MissingCommits,
-            })?;
-        let mut checkout = CheckoutBuilder::new();
-        repo.reset(&object, ResetType::Hard, Some(checkout.force()))
-            .map_err(|err| InstanceError {
-                cause: Some(Box::new(err)),
-                kind: InstanceErrorKind::CloningFailed,
-            })?;
+        cluster::rewind(&repo, &commit).map_err(|err| InstanceError {
+            cause: Some(Box::new(err)),
+            kind: InstanceErrorKind::CloningFailed,
+        })?;
         self.build_invocation(&url, &commit)
     }
 

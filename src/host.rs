@@ -1,6 +1,6 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use std::time;
+use std::{fmt, time};
 
 use rocket::http::RawStr;
 use rocket::request::FromParam;
@@ -11,19 +11,20 @@ use crate::invocation::*;
 
 const TIMEOUT: time::Duration = time::Duration::from_secs(5);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HostId(Uuid);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Host {
     id: HostId,
     #[serde(skip)]
+    #[serde(default = "std::time::Instant::now")]
     timestamp: time::Instant,
     hostname: String,
     state: HostState,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "desc")]
 pub enum HostState {
     /// Host was registered, but has now been assumed disconnected.
@@ -68,7 +69,7 @@ impl<'a> FromParam<'a> for HostId {
 }
 
 impl Host {
-    pub(crate) fn new(hostname: &str) -> Host {
+    pub fn new(hostname: &str) -> Host {
         Host {
             id: HostId(Uuid::new_v4()),
             hostname: hostname.to_string(),
@@ -110,5 +111,11 @@ impl Host {
 
     pub fn expired(&self) -> bool {
         time::Instant::now() > self.timestamp + TIMEOUT
+    }
+}
+
+impl fmt::Display for HostId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
