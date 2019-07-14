@@ -7,6 +7,7 @@ use rocket::request::FromParam;
 
 use serde::{Deserialize, Serialize};
 
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -22,7 +23,7 @@ pub struct Invocation {
     commit: String,
     descriptor: Option<ExperimentDescriptor>,
     start: DateTime<Utc>,
-    logs: Vec<PathBuf>,
+    logs: HashMap<String, PathBuf>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -65,7 +66,7 @@ impl Invocation {
                 commit: commit.to_string(),
                 descriptor: descriptor,
                 start: Utc::now(),
-                logs: vec![],
+                logs: HashMap::new(),
             },
             err,
         )

@@ -4,6 +4,7 @@ extern crate clap;
 use clap::{App, Arg};
 
 use cluster::host::{Host, HostState};
+use cluster::invocation::InvocationId;
 
 use response::{EmptyResponse, Response};
 
@@ -127,7 +128,45 @@ impl Client {
     }
 
     fn poll(&mut self) -> Result<(), ClientError> {
+        let response = reqwest::get(&format!("{}current", self.server))
+            .and_then(|mut response| response.json::<Response<InvocationId>>())
+            .map_err(|err| ClientError {
+                cause: Some(Box::new(err)),
+                kind: ClientErrorKind::Disconnected,
+            })?;
+        match response.into_result() {
+            Ok(id) => match self.host.current_invocation() {
+                Some(oid) if oid != id => {
+                    self.kill()?;
+                    self.host.set_state(HostState::Running { id });
+                }
+                None => {
+                    self.kill()?;
+                    self.host.set_state(HostState::Running { id });
+                }
+                _ => {}
+            },
+            _ => {
+                self.kill()?;
+                self.host.set_state(HostState::Idle);
+            }
+        }
         self.push_state()?;
+        Ok(())
+    }
+
+    fn kill(&mut self) -> Result<(), ClientError> {
+        if let Some(id) = self.host.current_invocation() {
+            self.host.set_state(HostState::Compressing { id });
+            self.push_state()?;
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            self.host.set_state(HostState::Uploading { id });
+            self.push_state()?;
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            self.host.set_state(HostState::Done { id });
+            self.push_state()?;
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
         Ok(())
     }
 }

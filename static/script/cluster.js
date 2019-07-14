@@ -1,5 +1,6 @@
 var current = undefined;
 var viewing = undefined;
+var descriptor = {};
 var hosts = {};
 var invocations = {};
 var hostStates = {};
@@ -226,15 +227,13 @@ function updateCurrent() {
       });
     }
   }, function(err) {
-    if (current !== undefined) {
-      current = undefined;
-      updateInvocations(function() {
-        while (active.firstChild) {
-          active.removeChild(active.firstChild);
-        }
-        active.appendChild(makeEmpty());
-      });
-    }
+    current = undefined;
+    updateInvocations(function() {
+      while (active.firstChild) {
+        active.removeChild(active.firstChild);
+      }
+      active.appendChild(makeEmpty());
+    });
   });
 }
 
@@ -276,6 +275,15 @@ function updateInvocations(callback) {
         list.appendChild(invocations[id].element);
       }
     }
+    if (viewing !== undefined && !children.includes(viewing)
+        && (current === undefined || current !== viewing)) {
+      viewing = undefined;
+      var content = document.getElementById("content");
+      while (content.firstChild) {
+        content.removeChild(content.firstChild);
+      }
+      document.getElementById("center_placeholder").classList.remove("hidden");
+    }
     callback();
   }, function(err) {});
 }
@@ -315,9 +323,16 @@ function updateHostState(host) {
       } else if (!('id' in hosts[host].state)) {
         element.classList.add(hosts[host].state.desc);
         element.appendChild(document.createTextNode(hosts[host].state.desc));
-      } else {
+      } else if (hosts[host].hostname in descriptor.logs) {
+        element.classList.add("logs");
+        element.appendChild(document.createTextNode("logs"));
+        // TODO add log download
+      } else if (viewing === current) {
         element.classList.add("busy");
         element.appendChild(document.createTextNode("busy"));
+      } else {
+        element.classList.add("abandoned");
+        element.appendChild(document.createTextNode("abandoned"));
       }
     } else {
       element.classList.add("disconnected");
@@ -327,6 +342,7 @@ function updateHostState(host) {
 }
 
 function renderInvocation(invocation) {
+  descriptor = invocation;
   hostStates = {};
   document.getElementById("center_placeholder").classList.add("hidden");
   var content = document.getElementById("content");
