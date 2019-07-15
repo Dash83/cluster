@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>cluster</title>
+    <link href="https://fonts.googleapis.com/css?family=M+PLUS+Rounded+1c" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="/static/style/style.css" rel="stylesheet">
+    <script type="text/javascript" src="/static/script/cluster.js"></script>
+  </head>
+  <body>
+    <div id="split">
+      <div id="left">
+        <span class="subtitle">
+          <i class="label material-icons">code</i>
+          <h3>invocation</h3>
+        </span>
+        <div id="active">
+          <div class="invocation">
+            <p class="placeholder">no active invocation</p>
+          </div>
+        </div>
+        <span class="subtitle">
+          <i class="label material-icons">history</i>
+          <h3>history</h3>
+        </span>
+        <p id="history_placeholder" class="placeholder"><br>no invocations to show</p>
+        <div id="invocations"></div>
+      </div>
+      <div id="center">
+        <div id="invoke">
+          <input id="input" type="text" placeholder="https://github.com/doctorn/cluster_example.git"/>
+          <a class="text_button" id="invoke_button">invoke</a>
+        </div>
+        <p id="center_placeholder" class="placeholder"><br>not viewing an invocation</p>
+        <div id="content"></div>
+      </div>
+      <div id="right">
+        <span class="subtitle">
+          <i class="label material-icons">memory</i>
+          <h3>hosts</h3>
+        </span>
+        <p id="hosts_placeholder" class="placeholder"><br>no hosts registered</p>
+        <div id="hosts"></div>
+      </div>
+    </div>
+  </body>
+</html>

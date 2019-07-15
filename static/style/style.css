@@ -1,0 +1,368 @@
+body {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  min-width: 960px;
+  overflow-y: hidden;
+  overflow-x: auto;
+  margin: 0px;
+  padding: 0px;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  position: relative;
+  height: 100vh;
+}
+
+a {
+  color: #1da1f2; 
+  text-decoration: none;
+}
+
+a.visited {
+  color: #1da1f2; 
+}
+
+h1, h2, h3, h4, p, a {
+  margin: 0px; 
+}
+
+code {
+  font-size: 16px;
+}
+
+pre {
+  font-size: 14px;
+  padding: 5px;
+  white-space: normal;
+  background-color: #eee;
+  border-radius: 5px;
+  counter-reset: line;
+  margin: 5px 0px 5px 0px;
+}
+
+.button {
+  cursor: pointer; 
+  transition: color 100ms;
+  color: #1da1f2;
+}
+
+.button:hover {
+  color: #31a9f3;
+}
+
+.subtitle {
+  display: flex;
+  flex-direction: row;
+  margin: 15px 5px 10px 5px;
+}
+
+.subtitle i {
+  margin-top: 2px;
+  margin-right: 10px;
+}
+
+input[type="text"] {
+  -webkit-appearance: none;
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1em; 
+  border-radius: 5px;
+  border: 1px #ddd solid;
+  padding: 3px 5px 3px 5px;
+  box-shadow: none;
+  width: 100%;
+  margin-right: 5px;
+  min-width: 0px;
+}
+
+#split {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 960px;
+}
+
+#left {
+  position: absolute;
+  top: -10px;
+  left: 0px;
+  height: 100%;
+  overflow: hidden;
+  width: 330px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+#center {
+  position: absolute;
+  top: -10px;
+  left: 330px;
+  height: 100%;
+  overflow: hidden;
+  width: calc(100% - 620px);
+  padding: 10px;
+  box-sizing: border-box;
+  min-width: 340px;
+}
+
+#content {
+  position: relative;
+  margin-top: 5px;
+}
+
+#right {
+  position: absolute;
+  top: -10px;
+  right: 0px;
+  height: 100%;
+  overflow: hidden;
+  width: 290px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+#invocations {
+  position: absolute;
+  overflow-y: auto;
+  width: 320px;
+  max-height: calc(100% - 220px);
+  border-radius: 5px;
+}
+
+#hosts {
+  position: absolute;
+  overflow-y: auto;
+  width: 270px;
+  max-height: calc(100% - 60px);
+  border-radius: 5px;
+}
+
+.invocation {
+  width: 300px;
+  height: 100px;
+  overflow: hidden;
+  border: 1px solid #DDD;
+  position: relative;
+  margin: 5px;
+  border-radius: 5px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.host {
+  width: 250px;
+  height: 100px;
+  overflow: hidden;
+  border: 1px solid #DDD;
+  position: relative;
+  margin: 5px;
+  border-radius: 5px;
+}
+
+.host .id {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+}
+
+.host .hostname {
+  position: absolute;
+  top: 23px;
+  left: 5px;
+}
+
+.host .state {
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  font-size: 16px;  
+}
+
+.hostname {
+  font-size: 18px;
+}
+
+.id {
+  font-size: 10px;
+  font-family: monospace;
+}
+
+.url {
+  font-size: 14px;
+}
+
+.commit {
+  font-size: 14px;
+  font-family: monospace;
+  background-color: #EEE;
+  border-radius: 5px;
+  color: #f94a76;
+}
+
+.repo {
+  margin-top: 10px;
+}
+
+.invocation .id {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+}
+
+.invocation .commit {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+}
+
+.invocation .name {
+  position: absolute;
+  top: 23px;
+  left: 5px;
+  font-size: 18px;  
+}
+
+.invocation .name.unresolved {
+  color: #AAA;
+  font-style: italic;
+}
+
+.invocation .url {
+  position: absolute;
+  left: 5px;
+  bottom: 25px;
+  text-overflow: ellipsis;
+  width: 290px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.invocation .time {
+  font-size: 13px;
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+}
+
+.invocation .status {
+  position: absolute;
+  color: #d84231;
+  top: 5px;
+  right: 5px;
+}
+
+.invocation .status.ok {
+  color: #78c42d;
+  right: 30px;
+}
+
+.invocation .popout {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+}
+
+.placeholder {
+  color: #AAA;
+  text-align: center;
+}
+
+.hidden {
+  visibility: hidden;
+  display: none;
+}
+
+.state {
+  cursor: pointer;
+}
+
+.state.disconnected {
+  font-style: italic;
+  color: #AAA;
+  cursor: default;
+}
+
+.state.busy {
+  color: #AAA;
+  cursor: default;
+}
+
+.state.idle {
+  color: #fe8019;
+  cursor: default;
+}
+
+.state.running {
+  color: #fcba04;
+}
+
+.state.errored {
+  color: #d84231;
+}
+
+.state.compressing {
+  color: #f94a76;
+}
+
+.state.uploading {
+  color: #30d1f2;
+}
+
+.state.done {
+  color: #78c42d;
+}
+
+.state.logs {
+  color: #1da1f2;
+}
+
+.state.abandoned {
+  color: #AAA;
+  cursor: default;
+}
+
+#reinvoke {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+}
+
+#invoke {
+  width: 100%;
+  overflow: hidden;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: row;
+}
+
+.text_button {
+  border-radius: 5px;
+  border: 1px solid #1da1f2;
+  height: 32px;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 100ms background-color 100ms;
+  cursor: pointer;
+}
+
+.text_button:hover {
+  background-color: #1da1f2;
+  color: white;
+}
+
+#setup {
+  margin-top: 15px;
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  border-radius: 5px;
+}
+
+.hostname .state {
+  float: right;
+  margin-right: 5px;
+}
