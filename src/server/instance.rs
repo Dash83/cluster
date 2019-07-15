@@ -33,6 +33,7 @@ pub enum InstanceErrorKind {
     /// There was a failure while attempting to clone the repository.
     CloningFailed,
     /// The cloned repository has commits missing (i.e. previously valid references are no longer
+    /// present).
     MissingCommits,
     /// The supplied invocation or host ID was invalid.
     InvalidId,

@@ -84,6 +84,10 @@ impl Invocation {
         &self.commit
     }
 
+    pub fn logs(&self) -> &HashMap<String, PathBuf> {
+        &self.logs
+    }
+
     pub fn record(&self) -> InvocationRecord {
         InvocationRecord {
             id: self.id,
@@ -96,6 +100,28 @@ impl Invocation {
             commit: self.commit.to_string(),
             start: self.start,
         }
+    }
+
+    pub fn split(self) -> Option<(InvocationRecord, ExperimentDescriptor)> {
+        let record = self.record();
+        match self.descriptor {
+            Some(descriptor) => Some((record, descriptor)),
+            None => None,
+        }
+    }
+}
+
+impl InvocationRecord {
+    pub fn id(&self) -> InvocationId {
+        self.id
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn commit(&self) -> &str {
+        &self.commit
     }
 }
 

@@ -2,10 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
+use std::fs::{self, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::str;
-use std::{fmt, fs};
 
 /// The name of the experiment manifest file.
 const MANIFEST: &str = "deployment.toml";
@@ -88,6 +90,49 @@ impl ExperimentDescriptor {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn log_dir(&self) -> &Path {
+        &self.log_dir
+    }
+
+    pub fn execute_for<P: AsRef<Path>, Q: AsRef<Path>>(&self, hostname: &str, work_dir: P, log: Q) {
+        if let Some(host) = self.hosts.get(hostname) {
+            let mut options = OpenOptions::new();
+            options.append(true).create(true);
+            let log_dir = work_dir.as_ref().join(self.log_dir());
+            fs::create_dir_all(&log_dir).unwrap_or(());
+            let stdout = log_dir.join(&log).with_extension("stdout");
+            let stderr = log_dir.join(&log).with_extension("stderr");
+            if let Some(ref command) = self.command {
+                let mut command = Command::new(command);
+                command.current_dir(&work_dir);
+                if let Some(ref args) = self.args {
+                    for arg in args.iter() {
+                        command.arg(arg);
+                    }
+                }
+                if self.gen_logs {
+                    command.stdout(Stdio::from(options.open(&stdout).unwrap()));
+                    command.stderr(Stdio::from(options.open(&stderr).unwrap()));
+                }
+                command.output().unwrap();
+            }
+            if let Some(ref command) = host.command {
+                let mut command = Command::new(command);
+                command.current_dir(&work_dir);
+                if let Some(ref args) = host.args {
+                    for arg in args.iter() {
+                        command.arg(arg);
+                    }
+                }
+                if self.gen_logs {
+                    command.stdout(Stdio::from(options.open(&stdout).unwrap()));
+                    command.stderr(Stdio::from(options.open(&stderr).unwrap()));
+                }
+                command.output().unwrap();
+            }
+        }
     }
 }
 
