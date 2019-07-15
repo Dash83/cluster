@@ -316,17 +316,18 @@ function updateHostState(host) {
     }
     element.classList = [];
     element.classList.add("state");
+    element.removeAttribute("href");
     if (host in hosts) {
-      if (hosts[host].state.id === viewing) {
+      if (hosts[host].hostname in descriptor.logs) {
+        element.classList.add("logs");
+        element.appendChild(document.createTextNode("logs"));
+        element.setAttribute("href", descriptor.logs[hosts[host].hostname]);
+      } else if (hosts[host].state.id === viewing) {
         element.classList.add(hosts[host].state.desc);
         element.appendChild(document.createTextNode(hosts[host].state.desc));
       } else if (!('id' in hosts[host].state)) {
         element.classList.add(hosts[host].state.desc);
         element.appendChild(document.createTextNode(hosts[host].state.desc));
-      } else if (hosts[host].hostname in descriptor.logs) {
-        element.classList.add("logs");
-        element.appendChild(document.createTextNode("logs"));
-        // TODO add log download
       } else if (viewing === current) {
         element.classList.add("busy");
         element.appendChild(document.createTextNode("busy"));
@@ -403,7 +404,7 @@ function renderInvocation(invocation) {
     var hostname = document.createElement("p");
     hostname.classList.add("hostname");
     hostname.appendChild(document.createTextNode(host));
-    var state = document.createElement("span");
+    var state = document.createElement("a");
     hostStates[host] = state;
     updateHostState(host);
     hostname.appendChild(state);
@@ -451,8 +452,15 @@ function viewInvocation(id) {
   }, function(err) {});
 }
 
+function updateViewing() {
+  if (viewing !== undefined) {
+    viewInvocation(viewing);
+  }
+}
+
 setInterval(updateCurrent, 500);
 setInterval(updateHosts, 500);
+setInterval(updateViewing, 500);
 
 document.addEventListener('DOMContentLoaded', function() {
   updateCurrent();

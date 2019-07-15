@@ -257,7 +257,7 @@ impl Client {
             })?;
         match response.into_result() {
             Ok(invocation) => {
-                if !invocation.logs().contains_key(self.host.hostname()) {
+                if !invocation.host_has_logged(self.host.hostname()) {
                     self.invoke_local(invocation)
                 } else {
                     self.host.set_state(HostState::Idle);
@@ -364,12 +364,24 @@ impl Client {
                 })
                 .and_then(|form| {
                     reqwest::Client::new()
-                        .post(&format!("{}upload", self.server))
+                        .post(&format!(
+                            "{}upload/{}/{}",
+                            self.server,
+                            executor.invocation.id(),
+                            self.host.id()
+                        ))
                         .multipart(form)
                         .send()
+                        .and_then(|mut response| response.json::<EmptyResponse>())
                         .map_err(|err| ClientError {
                             cause: Some(Box::new(err)),
                             kind: ClientErrorKind::UploadFailed,
+                        })
+                        .and_then(|response| {
+                            response.into_result().map_err(|err| ClientError {
+                                cause: Some(Box::new(err)),
+                                kind: ClientErrorKind::BadResponse,
+                            })
                         })
                 })?;
             fs::remove_file(path).unwrap_or(());

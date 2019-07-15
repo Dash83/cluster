@@ -9,14 +9,26 @@ mod instance;
 
 use cluster::host::{HostId, HostState};
 use cluster::invocation::InvocationId;
-use instance::Instance;
 
-use rocket::Request;
-use rocket::State;
+use multipart::server::Multipart;
+
+use rocket::data::{self, FromDataSimple};
+use rocket::http::Status;
+use rocket::{Data, Outcome, Request, State};
 
 use rocket_contrib::json::JsonValue;
 use rocket_contrib::serve::StaticFiles;
 use rocket_contrib::templates::Template;
+
+use self::instance::Instance;
+
+use std::fs;
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
+
+use uuid::Uuid;
+
+const LOG_DIR: &str = "logs/";
 
 macro_rules! ok {
     () => {
@@ -40,6 +52,43 @@ macro_rules! err {
             "msg": format!("{}", $err),
         })
     };
+}
+
+#[derive(Debug)]
+struct LogUpload(PathBuf);
+
+impl FromDataSimple for LogUpload {
+    type Error = ();
+
+    fn from_data(request: &Request, data: Data) -> data::Outcome<Self, Self::Error> {
+        if let Some(content_type) = request.headers().get_one("Content-Type") {
+            if let Some(index) = content_type.find("boundary=") {
+                let boundary = &content_type[(index + "boundary=".len())..];
+                let mut body = vec![];
+                if data.stream_to(&mut body).is_ok() {
+                    let mut multipart = Multipart::with_body(Cursor::new(body), boundary);
+                    let mut path = None;
+                    if multipart
+                        .foreach_entry(|mut entry| {
+                            if &*entry.headers.name == "log" {
+                                let log_path = Path::new(LOG_DIR)
+                                    .join(&format!("{}", Uuid::new_v4()))
+                                    .with_extension("tar.gz");
+                                entry.data.save().memory_threshold(0).with_path(&log_path);
+                                path = Some(log_path);
+                            }
+                        })
+                        .is_ok()
+                    {
+                        if let Some(path) = path {
+                            return Outcome::Success(LogUpload(path));
+                        }
+                    }
+                }
+            }
+        }
+        Outcome::Failure((Status::InternalServerError, ()))
+    }
 }
 
 mod host {
@@ -171,6 +220,25 @@ fn reinvoke(id: InvocationId, instance: State<Instance>) -> JsonValue {
     }
 }
 
+#[post("/upload/<id>/<host>", data = "<upload>")]
+fn upload(
+    upload: LogUpload,
+    id: InvocationId,
+    host: HostId,
+    instance: State<Instance>,
+) -> JsonValue {
+    instance
+        .invocation(id, |invocation| {
+            instance
+                .host(host, |host| {
+                    invocation.add_log(host, upload.0);
+                    json!({ "status": "ok" })
+                })
+                .unwrap_or(err!())
+        })
+        .unwrap_or(err!())
+}
+
 #[catch(404)]
 fn not_found(_request: &Request) -> JsonValue {
     err!("page not found")
@@ -182,14 +250,24 @@ fn internal_error(_request: &Request) -> JsonValue {
 }
 
 fn main() {
+    fs::create_dir(LOG_DIR).unwrap_or(());
     rocket::ignite()
         .manage(Instance::new("experiment/"))
         .register(catchers![internal_error, not_found])
         .mount("/static", StaticFiles::from("static/"))
+        .mount("/logs", StaticFiles::from("logs/"))
         .mount("/", routes![index])
         .mount(
             "/api",
-            routes![hosts, current, invocation, invocations, invoke, reinvoke],
+            routes![
+                hosts,
+                current,
+                invocation,
+                invocations,
+                invoke,
+                reinvoke,
+                upload
+            ],
         )
         .mount("/api/host", routes![host::host, host::register])
         .mount(

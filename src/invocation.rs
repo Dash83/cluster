@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::descriptor::{ExperimentDescriptor, ExperimentParseError};
+use crate::host::Host;
 
 use rocket::http::RawStr;
 use rocket::request::FromParam;
@@ -84,8 +85,13 @@ impl Invocation {
         &self.commit
     }
 
-    pub fn logs(&self) -> &HashMap<String, PathBuf> {
-        &self.logs
+    pub fn host_has_logged(&self, hostname: &str) -> bool {
+        self.logs.contains_key(hostname)
+    }
+
+    pub fn add_log<P: AsRef<Path>>(&mut self, host: &Host, path: P) {
+        self.logs
+            .insert(host.hostname().to_string(), path.as_ref().to_path_buf());
     }
 
     pub fn record(&self) -> InvocationRecord {
