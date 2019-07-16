@@ -120,7 +120,7 @@ impl<'a> Connector {
     }
 
     pub fn invocation(&self, id: InvocationId) -> Result<Invocation, ResponseError> {
-        self.get::<Invocation>(&format!("invocation{}", id))
+        self.get::<Invocation>(&format!("invocation/{}", id))
     }
 
     pub fn upload<P: AsRef<Path>>(
