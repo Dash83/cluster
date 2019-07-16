@@ -260,8 +260,8 @@ impl Client {
                 if !invocation.host_has_logged(self.host.hostname()) {
                     self.invoke_local(invocation)
                 } else {
+                    self.kill()?;
                     self.host.set_state(HostState::Idle);
-                    self.push_state()?;
                     Ok(None)
                 }
             }
@@ -280,7 +280,7 @@ impl Client {
                             _ => {}
                         }
                     };
-                };
+                }
                 let repo = match repo {
                     Some(repo) => repo,
                     None => self.clone(invocation.url(), invocation.commit())?,
