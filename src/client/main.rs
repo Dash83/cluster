@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate clap;
 
+use api::Connector;
+
 use chrono::Utc;
 
 use clap::{App, Arg};
@@ -17,21 +19,17 @@ use git2::Repository;
 use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet};
 use nix::unistd::{fork, setpgid, ForkResult, Pid};
 
-use reqwest::multipart;
-
-use response::{EmptyResponse, Response};
-
 use std::error::Error;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::{fmt, mem, process, thread, time};
 
-mod response;
+mod api;
 
 struct Client {
     path: PathBuf,
-    server: String,
+    connector: Connector,
     host: Host,
     executor: Option<Executor>,
 }
@@ -133,57 +131,29 @@ impl From<ClientErrorKind> for ClientError {
 
 impl Client {
     fn new<P: AsRef<Path>>(server: &str, port: u16, path: P) -> Result<Client, ClientError> {
-        let server = format!("http://{}:{}/api/", server, port);
+        let connector = Connector::new(server, port);
         let hostname = gethostname::gethostname()
             .into_string()
             .map_err(|_| ClientError::from(ClientErrorKind::NoHostname))?;
-        let host = reqwest::get(&format!("{}host/register/{}", server, hostname))
-            .and_then(|mut response| response.json::<Response<Host>>())
-            .map_err(|err| ClientError {
-                cause: Some(Box::new(err)),
-                kind: ClientErrorKind::RegistrationFailed,
-            })
-            .and_then(|response| {
-                response.into_result().map_err(|err| ClientError {
-                    cause: Some(Box::new(err)),
-                    kind: ClientErrorKind::RegistrationFailed,
-                })
-            })?;
+        let host = connector.register(&hostname).map_err(|err| ClientError {
+            cause: Some(Box::new(err)),
+            kind: ClientErrorKind::RegistrationFailed,
+        })?;
         Ok(Client {
             path: path.as_ref().to_path_buf(),
-            server,
             host,
+            connector,
             executor: None,
         })
     }
 
     fn push_state(&self) -> Result<(), ClientError> {
-        let state = match self.host.state() {
-            HostState::Idle => "idle".to_string(),
-            HostState::Running { id } => format!("running/{}", id),
-            HostState::Errored { id } => format!("errored/{}", id),
-            HostState::Compressing { id } => format!("compressing/{}", id),
-            HostState::Uploading { id } => format!("uploading/{}", id),
-            HostState::Done { id } => format!("done/{}", id),
-            _ => unreachable!(),
-        };
-        reqwest::get(&format!(
-            "{}host/status/{}/{}",
-            self.server,
-            self.host.id(),
-            state
-        ))
-        .and_then(|mut response| response.json::<EmptyResponse>())
-        .map_err(|err| ClientError {
-            cause: Some(Box::new(err)),
-            kind: ClientErrorKind::Disconnected,
-        })
-        .and_then(|response| {
-            response.into_result().map_err(|err| ClientError {
+        self.connector
+            .status(self.host.id(), self.host.state())
+            .map_err(|err| ClientError {
                 cause: Some(Box::new(err)),
-                kind: ClientErrorKind::BadResponse,
+                kind: ClientErrorKind::Disconnected,
             })
-        })
     }
 
     fn poll(&mut self) {
@@ -205,13 +175,7 @@ impl Client {
     }
 
     fn poll_raw(&mut self) -> Result<(), ClientError> {
-        let response = reqwest::get(&format!("{}current", self.server))
-            .and_then(|mut response| response.json::<Response<InvocationId>>())
-            .map_err(|err| ClientError {
-                cause: Some(Box::new(err)),
-                kind: ClientErrorKind::Disconnected,
-            })?;
-        match response.into_result() {
+        match self.connector.current() {
             Ok(id) => match self.host.current_invocation() {
                 Some(oid) if oid != id => {
                     self.executor = self.invoke(id)?;
@@ -249,13 +213,7 @@ impl Client {
     }
 
     fn invoke(&mut self, id: InvocationId) -> Result<Option<Executor>, ClientError> {
-        let response = reqwest::get(&format!("{}invocation/{}", self.server, id))
-            .and_then(|mut response| response.json::<Response<Invocation>>())
-            .map_err(|err| ClientError {
-                cause: Some(Box::new(err)),
-                kind: ClientErrorKind::Disconnected,
-            })?;
-        match response.into_result() {
+        match self.connector.invocation(id) {
             Ok(invocation) => {
                 if !invocation.host_has_logged(self.host.hostname()) {
                     self.invoke_local(invocation)
@@ -356,33 +314,11 @@ impl Client {
                 id: executor.invocation.id(),
             });
             self.push_state()?;
-            multipart::Form::new()
-                .file("log", &path)
+            self.connector
+                .upload(&path, executor.invocation.id(), self.host.id())
                 .map_err(|err| ClientError {
                     cause: Some(Box::new(err)),
                     kind: ClientErrorKind::UploadFailed,
-                })
-                .and_then(|form| {
-                    reqwest::Client::new()
-                        .post(&format!(
-                            "{}upload/{}/{}",
-                            self.server,
-                            executor.invocation.id(),
-                            self.host.id()
-                        ))
-                        .multipart(form)
-                        .send()
-                        .and_then(|mut response| response.json::<EmptyResponse>())
-                        .map_err(|err| ClientError {
-                            cause: Some(Box::new(err)),
-                            kind: ClientErrorKind::UploadFailed,
-                        })
-                        .and_then(|response| {
-                            response.into_result().map_err(|err| ClientError {
-                                cause: Some(Box::new(err)),
-                                kind: ClientErrorKind::BadResponse,
-                            })
-                        })
                 })?;
             fs::remove_file(path).unwrap_or(());
             println!("done");
