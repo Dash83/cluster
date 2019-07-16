@@ -118,7 +118,7 @@ impl ExperimentDescriptor {
                     command.stdout(Stdio::from(options.open(&stdout).unwrap()));
                     command.stderr(Stdio::from(options.open(&stderr).unwrap()));
                 }
-                command.output().unwrap();
+                command.status().unwrap();
             }
             if let Some(ref command) = host.command {
                 let mut command = Command::new(command);
@@ -132,7 +132,7 @@ impl ExperimentDescriptor {
                     command.stdout(Stdio::from(options.open(&stdout).unwrap()));
                     command.stderr(Stdio::from(options.open(&stderr).unwrap()));
                 }
-                command.output().unwrap();
+                command.status().unwrap();
             }
         }
     }
