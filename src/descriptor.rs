@@ -101,7 +101,9 @@ impl ExperimentDescriptor {
             let mut options = OpenOptions::new();
             options.append(true).create(true);
             let log_dir = work_dir.as_ref().join(self.log_dir());
-            fs::create_dir_all(&log_dir).unwrap_or(());
+            if self.gen_logs {
+                fs::create_dir_all(&log_dir).unwrap_or(());
+            }
             let stdout = log_dir.join(&log).with_extension("stdout");
             let stderr = log_dir.join(&log).with_extension("stderr");
             if let Some(ref command) = self.command {
