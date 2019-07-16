@@ -25,7 +25,7 @@ pub struct InstanceError {
 #[derive(Debug)]
 pub enum InstanceErrorKind {
     /// The given hostname was already registered.
-    HostRegisterd,
+    HostRegistered,
     /// The repository supplied had a manifest that could not be parsed.
     BrokenManifest,
     /// There is no repository cloned.
@@ -42,7 +42,7 @@ pub enum InstanceErrorKind {
 impl fmt::Display for InstanceErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            InstanceErrorKind::HostRegisterd => {
+            InstanceErrorKind::HostRegistered => {
                 write!(f, "the given hostname was already registered")
             }
             InstanceErrorKind::BrokenManifest => write!(
@@ -153,7 +153,7 @@ impl Instance {
         for (id, host) in hosts.iter_mut() {
             if hostname == host.hostname() {
                 return if host.state() != HostState::Disconnected {
-                    Err(InstanceErrorKind::HostRegisterd.into())
+                    Err(InstanceErrorKind::HostRegistered.into())
                 } else {
                     host.refresh();
                     host.set_state(HostState::Idle);
