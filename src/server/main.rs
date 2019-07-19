@@ -110,58 +110,45 @@ mod host {
     pub mod status {
         use super::*;
 
-        #[get("/<id>/idle")]
-        pub fn idle(id: HostId, instance: State<Instance>) -> JsonValue {
-            instance.host(id, |host| {
-                host.refresh();
-                host.set_state(HostState::Idle)
-            });
-            ok!()
+        #[inline]
+        fn set_state(instance: State<Instance>, id: HostId, state: HostState) -> JsonValue {
+            instance
+                .host(id, |host| {
+                    host.refresh();
+                    host.set_state(state);
+                    ok!()
+                })
+                .unwrap_or(err!())
+        }
+
+        #[get("/<host>/idle")]
+        pub fn idle(host: HostId, instance: State<Instance>) -> JsonValue {
+            set_state(instance, host, HostState::Idle)
         }
 
         #[get("/<host>/running/<id>")]
         pub fn running(host: HostId, id: InvocationId, instance: State<Instance>) -> JsonValue {
-            instance.host(host, |host| {
-                host.refresh();
-                host.set_state(HostState::Running { id })
-            });
-            ok!()
+            set_state(instance, host, HostState::Running { id })
         }
 
         #[get("/<host>/errored/<id>")]
         pub fn errored(host: HostId, id: InvocationId, instance: State<Instance>) -> JsonValue {
-            instance.host(host, |host| {
-                host.refresh();
-                host.set_state(HostState::Errored { id })
-            });
-            ok!()
+            set_state(instance, host, HostState::Errored { id })
         }
 
         #[get("/<host>/compressing/<id>")]
         pub fn compressing(host: HostId, id: InvocationId, instance: State<Instance>) -> JsonValue {
-            instance.host(host, |host| {
-                host.refresh();
-                host.set_state(HostState::Compressing { id })
-            });
-            ok!()
+            set_state(instance, host, HostState::Compressing { id })
         }
 
         #[get("/<host>/uploading/<id>")]
         pub fn uploading(host: HostId, id: InvocationId, instance: State<Instance>) -> JsonValue {
-            instance.host(host, |host| {
-                host.refresh();
-                host.set_state(HostState::Uploading { id });
-            });
-            ok!()
+            set_state(instance, host, HostState::Uploading { id })
         }
 
         #[get("/<host>/done/<id>")]
         pub fn done(host: HostId, id: InvocationId, instance: State<Instance>) -> JsonValue {
-            instance.host(host, |host| {
-                host.refresh();
-                host.set_state(HostState::Done { id })
-            });
-            ok!()
+            set_state(instance, host, HostState::Done { id })
         }
     }
 }

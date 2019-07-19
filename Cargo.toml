@@ -29,6 +29,7 @@ reqwest = "0.9.18"
 tar = "0.4.26"
 flate2 = "1.0.9"
 clap = "2.33.0"
+rand = "0.7.0"
 
 [dependencies.rocket_contrib]
 version = "0.4.2"

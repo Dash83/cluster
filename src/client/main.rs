@@ -19,18 +19,20 @@ use git2::Repository;
 use nix::sys::signal::{self, SaFlags, SigAction, SigHandler, SigSet};
 use nix::unistd::{fork, setpgid, ForkResult, Pid};
 
+use rand::Rng;
+
 use std::error::Error;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::{fmt, mem, process, thread, time};
+use std::sync::{Arc, Mutex, RwLock};
+use std::{cmp, fmt, mem, process, thread, time};
 
 mod api;
 
 struct Client {
     path: PathBuf,
-    connector: Connector,
-    host: Host,
+    connector: Arc<Connector>,
+    host: Arc<RwLock<Host>>,
     executor: Option<Executor>,
 }
 
@@ -51,10 +53,6 @@ struct ClientError {
 enum ClientErrorKind {
     /// Couldn't get the client hostname from the system.
     NoHostname,
-    /// Couldn't perform initial registration with the server.
-    RegistrationFailed,
-    /// Registered, but currently disconnected from the server.
-    Disconnected,
     /// Requests successfully reaching the server, but responses have returned errors.
     BadResponse,
     /// The subprocess for the invocation couldn't be forked.
@@ -75,12 +73,6 @@ impl fmt::Display for ClientErrorKind {
         match self {
             ClientErrorKind::NoHostname => {
                 write!(f, "couldn't get the client hostname from the system")
-            }
-            ClientErrorKind::RegistrationFailed => {
-                write!(f, "couldn't perform initial registration with the server")
-            }
-            ClientErrorKind::Disconnected => {
-                write!(f, "registered, but currently disconnected from the server")
             }
             ClientErrorKind::BadResponse => write!(
                 f,
@@ -131,14 +123,47 @@ impl From<ClientErrorKind> for ClientError {
 
 impl Client {
     fn new<P: AsRef<Path>>(server: &str, port: u16, path: P) -> Result<Client, ClientError> {
-        let connector = Connector::new(server, port);
+        let connector = Arc::new(Connector::new(server, port));
         let hostname = gethostname::gethostname()
             .into_string()
             .map_err(|_| ClientError::from(ClientErrorKind::NoHostname))?;
-        let host = connector.register(&hostname).map_err(|err| ClientError {
-            cause: Some(Box::new(err)),
-            kind: ClientErrorKind::RegistrationFailed,
-        })?;
+        let host = Arc::new(RwLock::new(loop {
+            println!("registering...");
+            match connector.register(&hostname) {
+                Ok(host) => break host,
+                _ => thread::sleep(time::Duration::from_millis(1000)),
+            }
+        }));
+        {
+            let connector = Arc::clone(&connector);
+            let host = Arc::clone(&host);
+            thread::spawn(move || {
+                let mut rng = rand::thread_rng();
+                loop {
+                    thread::sleep(time::Duration::from_millis(1000));
+                    let (id, state) = {
+                        let host = host.read().unwrap();
+                        (host.id(), host.state())
+                    };
+                    let mut retries = 0;
+                    while let Err(ref err) = connector.status(id, state) {
+                        if err.is_bad_response() {
+                            println!("registering...");
+                            match connector.register(&hostname) {
+                                Ok(registered) => {
+                                    *host.write().unwrap() = registered;
+                                }
+                                _ => {}
+                            }
+                            break;
+                        }
+                        retries = cmp::min(retries + 1, 5);
+                        let backoff = rng.gen_range(0, 1 << retries);
+                        thread::sleep(backoff * time::Duration::from_millis(500))
+                    }
+                }
+            });
+        }
         Ok(Client {
             path: path.as_ref().to_path_buf(),
             host,
@@ -147,26 +172,12 @@ impl Client {
         })
     }
 
-    fn push_state(&self) -> Result<(), ClientError> {
-        self.connector
-            .status(self.host.id(), self.host.state())
-            .map_err(|err| ClientError {
-                cause: Some(Box::new(err)),
-                kind: ClientErrorKind::Disconnected,
-            })
-    }
-
     fn poll(&mut self) {
         match self.poll_raw() {
             Err(err) => {
-                match err.kind {
-                    ClientErrorKind::Disconnected => {}
-                    _ => {
-                        if let Some(id) = self.host.current_invocation() {
-                            self.host.set_state(HostState::Errored { id });
-                            self.push_state().unwrap_or(());
-                        }
-                    }
+                let invocation = { self.host.read().unwrap().current_invocation() };
+                if let Some(id) = invocation {
+                    self.set_state(HostState::Errored { id });
                 }
                 println!("{:?}", err);
             }
@@ -176,27 +187,30 @@ impl Client {
 
     fn poll_raw(&mut self) -> Result<(), ClientError> {
         match self.connector.current() {
-            Ok(id) => match self.host.current_invocation() {
-                Some(oid) if oid != id => {
-                    self.executor = self.invoke(id)?;
-                }
-                None => {
-                    self.executor = self.invoke(id)?;
-                }
-                _ => {
-                    if let Some(ref executor) = self.executor {
-                        if signal::killpg(executor.pid, None).is_err() {
-                            self.kill()?;
+            Ok(id) => {
+                let invocation = { self.host.read().unwrap().current_invocation() };
+                match invocation {
+                    Some(oid) if oid != id => {
+                        self.executor = self.invoke(id)?;
+                    }
+                    None => {
+                        self.executor = self.invoke(id)?;
+                    }
+                    _ => {
+                        if let Some(ref executor) = self.executor {
+                            if signal::killpg(executor.pid, None).is_err() {
+                                self.kill()?;
+                            }
                         }
                     }
                 }
-            },
+            }
             _ => {
                 self.kill()?;
-                self.host.set_state(HostState::Idle);
+                self.set_state(HostState::Idle);
             }
         }
-        self.push_state()
+        Ok(())
     }
 
     fn clone(&self, url: &str, commit: &str) -> Result<Repository, ClientError> {
@@ -215,11 +229,11 @@ impl Client {
     fn invoke(&mut self, id: InvocationId) -> Result<Option<Executor>, ClientError> {
         match self.connector.invocation(id) {
             Ok(invocation) => {
-                if !invocation.host_has_logged(self.host.hostname()) {
+                if !invocation.host_has_logged(self.host.read().unwrap().hostname()) {
                     self.invoke_local(invocation)
                 } else {
                     self.kill()?;
-                    self.host.set_state(HostState::Idle);
+                    self.set_state(HostState::Idle);
                     Ok(None)
                 }
             }
@@ -245,7 +259,7 @@ impl Client {
                 };
                 match fork() {
                     Ok(ForkResult::Parent { child, .. }) => {
-                        self.host.set_state(HostState::Running {
+                        self.set_state(HostState::Running {
                             id: invocation.id(),
                         });
                         Ok(Some(Executor {
@@ -268,12 +282,13 @@ impl Client {
                             )
                             .unwrap();
                         }
+                        let host = self.host.read().unwrap();
                         descriptor.execute_for(
-                            self.host.hostname(),
+                            host.hostname(),
                             &self.path,
                             &format!(
                                 "{}@{}-{}",
-                                self.host.hostname(),
+                                host.hostname(),
                                 descriptor.name(),
                                 Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string()
                             ),
@@ -299,10 +314,9 @@ impl Client {
             signal::killpg(executor.pid, signal::SIGKILL).unwrap_or(());
             println!("done");
             self.upload(&executor)?;
-            self.host.set_state(HostState::Done {
+            self.set_state(HostState::Done {
                 id: executor.invocation.id(),
             });
-            self.push_state()?;
         }
         Ok(executor)
     }
@@ -310,12 +324,15 @@ impl Client {
     fn upload(&mut self, executor: &Executor) -> Result<(), ClientError> {
         if let Some(path) = self.compress(executor)? {
             println!("uploading logs...");
-            self.host.set_state(HostState::Uploading {
+            self.set_state(HostState::Uploading {
                 id: executor.invocation.id(),
             });
-            self.push_state()?;
             self.connector
-                .upload(&path, executor.invocation.id(), self.host.id())
+                .upload(
+                    &path,
+                    executor.invocation.id(),
+                    self.host.read().unwrap().id(),
+                )
                 .map_err(|err| ClientError {
                     cause: Some(Box::new(err)),
                     kind: ClientErrorKind::UploadFailed,
@@ -328,10 +345,9 @@ impl Client {
 
     fn compress(&mut self, executor: &Executor) -> Result<Option<PathBuf>, ClientError> {
         println!("compressing logs...");
-        self.host.set_state(HostState::Compressing {
+        self.set_state(HostState::Compressing {
             id: executor.invocation.id(),
         });
-        self.push_state()?;
         let path = self.path.join("archive.tar.gz");
         File::create(&path)
             .and_then(|tar_gz| {
@@ -345,6 +361,10 @@ impl Client {
             })?;
         println!("done");
         Ok(Some(path))
+    }
+
+    fn set_state(&mut self, state: HostState) {
+        self.host.write().unwrap().set_state(state);
     }
 }
 

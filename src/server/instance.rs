@@ -152,13 +152,9 @@ impl Instance {
         let mut hosts = self.hosts.lock().unwrap();
         for (id, host) in hosts.iter_mut() {
             if hostname == host.hostname() {
-                return if host.state() != HostState::Disconnected {
-                    Err(InstanceErrorKind::HostRegistered.into())
-                } else {
-                    host.refresh();
-                    host.set_state(HostState::Idle);
-                    Ok(*id)
-                };
+                host.refresh();
+                host.set_state(HostState::Idle);
+                return Ok(*id);
             }
         }
         let host = Host::new(hostname);

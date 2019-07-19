@@ -91,6 +91,15 @@ impl From<ResponseErrorKind> for ResponseError {
     }
 }
 
+impl ResponseError {
+    pub fn is_bad_response(&self) -> bool {
+        match self.kind {
+            ResponseErrorKind::BadResponse(_) => true,
+            _ => false,
+        }
+    }
+}
+
 pub struct Connector(String);
 
 impl<'a> Connector {
