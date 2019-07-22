@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::invocation::*;
 
-const TIMEOUT: time::Duration = time::Duration::from_secs(5);
+const TIMEOUT: time::Duration = time::Duration::from_secs(10);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HostId(Uuid);
