@@ -34,6 +34,7 @@ struct Client {
     connector: Arc<Connector>,
     host: Arc<RwLock<Host>>,
     executor: Option<Executor>,
+    history: Option<Executor>,
 }
 
 struct Executor {
@@ -130,8 +131,11 @@ impl Client {
         let host = Arc::new(RwLock::new(loop {
             println!("registering...");
             match connector.register(&hostname) {
-                Ok(host) => break host,
-                _ => thread::sleep(time::Duration::from_millis(1000)),
+                Ok(host) => {
+                    println!("done");
+                    break host;
+                }
+                _ => thread::sleep(time::Duration::from_millis(2000)),
             }
         }));
         {
@@ -140,7 +144,7 @@ impl Client {
             thread::spawn(move || {
                 let mut rng = rand::thread_rng();
                 loop {
-                    thread::sleep(time::Duration::from_millis(1000));
+                    thread::sleep(time::Duration::from_millis(2000));
                     let (id, state) = {
                         let host = host.read().unwrap();
                         (host.id(), host.state())
@@ -152,6 +156,7 @@ impl Client {
                             match connector.register(&hostname) {
                                 Ok(registered) => {
                                     *host.write().unwrap() = registered;
+                                    println!("done");
                                 }
                                 _ => {}
                             }
@@ -169,6 +174,7 @@ impl Client {
             host,
             connector,
             executor: None,
+            history: None,
         })
     }
 
@@ -215,6 +221,7 @@ impl Client {
 
     fn clone(&self, url: &str, commit: &str) -> Result<Repository, ClientError> {
         fs::remove_dir_all(&self.path).unwrap_or(());
+        println!("cloning...");
         let repo = Repository::clone(url, &self.path).map_err(|err| ClientError {
             cause: Some(Box::new(err)),
             kind: ClientErrorKind::CloningFailed,
@@ -233,7 +240,7 @@ impl Client {
                     self.invoke_local(invocation)
                 } else {
                     self.kill()?;
-                    self.set_state(HostState::Idle);
+                    self.set_state(HostState::Done { id });
                     Ok(None)
                 }
             }
@@ -244,14 +251,16 @@ impl Client {
     fn invoke_local(&mut self, invocation: Invocation) -> Result<Option<Executor>, ClientError> {
         match invocation.split() {
             Some((invocation, descriptor)) => {
+                self.kill()?;
                 let mut repo = None;
-                if let Some(old) = self.kill()? {
+                if let Some(ref old) = self.history {
                     if old.invocation.url() == invocation.url() {
-                        match cluster::rewind(&old.repo, invocation.commit()) {
-                            Ok(_) => repo = Some(old.repo),
-                            _ => {}
+                        if let Ok(_) = cluster::rewind(&old.repo, invocation.commit()) {
+                            if let Ok(opened) = Repository::open(&self.path) {
+                                repo = Some(opened);
+                            }
                         }
-                    };
+                    }
                 }
                 let repo = match repo {
                     Some(repo) => repo,
@@ -293,7 +302,7 @@ impl Client {
                                 Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string()
                             ),
                         );
-                        process::exit(1);
+                        process::exit(0);
                     }
                     Err(err) => Err(ClientError {
                         cause: Some(Box::new(err)),
@@ -305,23 +314,25 @@ impl Client {
         }
     }
 
-    fn kill(&mut self) -> Result<Option<Executor>, ClientError> {
-        let mut executor = None;
-        mem::swap(&mut executor, &mut self.executor);
-        if let Some(ref executor) = executor {
-            println!("killing child process...");
-            signal::killpg(executor.pid, signal::SIGTERM).unwrap_or(());
-            signal::killpg(executor.pid, signal::SIGKILL).unwrap_or(());
-            println!("done");
-            self.upload(&executor)?;
-            self.set_state(HostState::Done {
-                id: executor.invocation.id(),
-            });
+    fn kill(&mut self) -> Result<(), ClientError> {
+        if self.executor.is_some() {
+            self.history = None;
+            mem::swap(&mut self.history, &mut self.executor);
+            if let Some(ref executor) = self.history {
+                println!("killing child process...");
+                signal::killpg(executor.pid, signal::SIGTERM).unwrap_or(());
+                signal::killpg(executor.pid, signal::SIGKILL).unwrap_or(());
+                println!("done");
+                self.upload(executor)?;
+                self.set_state(HostState::Done {
+                    id: executor.invocation.id(),
+                });
+            }
         }
-        Ok(executor)
+        Ok(())
     }
 
-    fn upload(&mut self, executor: &Executor) -> Result<(), ClientError> {
+    fn upload(&self, executor: &Executor) -> Result<(), ClientError> {
         if let Some(path) = self.compress(executor)? {
             println!("uploading logs...");
             self.set_state(HostState::Uploading {
@@ -343,7 +354,7 @@ impl Client {
         Ok(())
     }
 
-    fn compress(&mut self, executor: &Executor) -> Result<Option<PathBuf>, ClientError> {
+    fn compress(&self, executor: &Executor) -> Result<Option<PathBuf>, ClientError> {
         println!("compressing logs...");
         self.set_state(HostState::Compressing {
             id: executor.invocation.id(),
@@ -363,7 +374,7 @@ impl Client {
         Ok(Some(path))
     }
 
-    fn set_state(&mut self, state: HostState) {
+    fn set_state(&self, state: HostState) {
         self.host.write().unwrap().set_state(state);
     }
 }
@@ -413,14 +424,14 @@ fn main() {
     let client = Arc::new(Mutex::new(client));
     {
         let client = Arc::clone(&client);
-        ctrlc::set_handler(move || {
-            client.lock().unwrap().kill().unwrap();
-            process::exit(0);
+        ctrlc::set_handler(move || match client.lock().unwrap().kill() {
+            Ok(_) => process::exit(0),
+            _ => process::exit(1),
         })
         .unwrap();
     }
     loop {
         client.lock().unwrap().poll();
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(2000));
     }
 }

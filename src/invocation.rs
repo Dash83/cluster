@@ -27,7 +27,7 @@ pub struct Invocation {
     logs: HashMap<String, PathBuf>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InvocationRecord {
     id: InvocationId,
     url: String,

@@ -106,6 +106,7 @@ impl Instance {
         instance
     }
 
+    #[inline]
     pub fn host<F, T>(&self, id: HostId, f: F) -> Option<T>
     where
         F: FnOnce(&mut Host) -> T,
@@ -113,6 +114,7 @@ impl Instance {
         self.hosts.lock().unwrap().get_mut(&id).map(f)
     }
 
+    #[inline]
     pub fn hosts<F, T>(&self, f: F) -> T
     where
         F: Fn(&mut dyn Iterator<Item = &'_ mut Host>) -> T,
@@ -122,6 +124,7 @@ impl Instance {
         f(&mut iter.map(|(_, host)| host))
     }
 
+    #[inline]
     pub fn invocation<F, T>(&self, id: InvocationId, f: F) -> Option<T>
     where
         F: FnOnce(&mut Invocation) -> T,
@@ -132,6 +135,7 @@ impl Instance {
         }
     }
 
+    #[inline]
     pub fn invocations<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&mut dyn Iterator<Item = &'_ mut Invocation>) -> T,

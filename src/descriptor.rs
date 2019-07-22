@@ -20,7 +20,7 @@ lazy_static! {
     static ref LOG_DIR_DEFAULT: PathBuf = PathBuf::from("logs/");
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ExperimentDescriptor {
     name: String,
     command: Option<String>,
@@ -32,7 +32,7 @@ pub struct ExperimentDescriptor {
     log_dir: PathBuf,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct HostDescriptor {
     command: Option<String>,
     args: Option<Vec<String>>,
