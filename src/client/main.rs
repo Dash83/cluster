@@ -24,6 +24,7 @@ use rand::Rng;
 use std::error::Error;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::{cmp, fmt, mem, process, thread, time};
 
@@ -355,23 +356,28 @@ impl Client {
     }
 
     fn compress(&self, executor: &Executor) -> Result<Option<PathBuf>, ClientError> {
-        println!("compressing logs...");
-        self.set_state(HostState::Compressing {
-            id: executor.invocation.id(),
-        });
-        let path = self.path.join("archive.tar.gz");
-        File::create(&path)
-            .and_then(|tar_gz| {
-                let enc = GzEncoder::new(tar_gz, Compression::default());
-                let mut tar = tar::Builder::new(enc);
-                tar.append_dir_all(".", self.path.join(executor.descriptor.log_dir()))
-            })
-            .map_err(|err| ClientError {
-                cause: Some(Box::new(err)),
-                kind: ClientErrorKind::CompressionFailed,
-            })?;
-        println!("done");
-        Ok(Some(path))
+        let log_dir = self.path.join(executor.descriptor.log_dir());
+        if log_dir.exists() {
+            println!("compressing logs...");
+            self.set_state(HostState::Compressing {
+                id: executor.invocation.id(),
+            });
+            let path = self.path.join("archive.tar.gz");
+            File::create(&path)
+                .and_then(|tar_gz| {
+                    let enc = GzEncoder::new(tar_gz, Compression::default());
+                    let mut tar = tar::Builder::new(enc);
+                    tar.append_dir_all(".", log_dir)
+                })
+                .map_err(|err| ClientError {
+                    cause: Some(Box::new(err)),
+                    kind: ClientErrorKind::CompressionFailed,
+                })?;
+            println!("done");
+            Ok(Some(path))
+        } else {
+            Ok(None)
+        }
     }
 
     fn set_state(&self, state: HostState) {
@@ -415,23 +421,33 @@ fn main() {
         )
         .unwrap();
     }
-    let client = Client::new(
-        matches.value_of("server").unwrap(),
-        value_t!(matches, "port", u16).unwrap_or(8000),
-        matches.value_of("path").unwrap_or("experiment/"),
-    )
-    .unwrap();
-    let client = Arc::new(Mutex::new(client));
+    let client = Arc::new(Mutex::new(
+        Client::new(
+            matches.value_of("server").unwrap(),
+            value_t!(matches, "port", u16).unwrap_or(8000),
+            matches.value_of("path").unwrap_or("experiment/"),
+        )
+        .unwrap(),
+    ));
     {
         let client = Arc::clone(&client);
-        ctrlc::set_handler(move || match client.lock().unwrap().kill() {
-            Ok(_) => process::exit(0),
-            _ => process::exit(1),
-        })
-        .unwrap();
+        thread::spawn(move || loop {
+            client.lock().unwrap().poll();
+            thread::sleep(time::Duration::from_millis(2000));
+        });
     }
-    loop {
-        client.lock().unwrap().poll();
-        thread::sleep(time::Duration::from_millis(2000));
+    let term = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::SIGTERM, Arc::clone(&term)).unwrap();
+    signal_hook::flag::register(signal_hook::SIGHUP, Arc::clone(&term)).unwrap();
+    signal_hook::flag::register(signal_hook::SIGINT, Arc::clone(&term)).unwrap();
+    signal_hook::flag::register(signal_hook::SIGQUIT, Arc::clone(&term)).unwrap();
+    while !term.load(Ordering::Relaxed) {
+        if term.swap(false, Ordering::Relaxed) {
+            println!("exiting...");
+            match client.lock().unwrap().kill() {
+                Ok(_) => process::exit(0),
+                _ => process::exit(1),
+            }
+        }
     }
 }
