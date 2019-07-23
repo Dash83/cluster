@@ -136,7 +136,7 @@ impl Client {
                     println!("done");
                     break host;
                 }
-                _ => thread::sleep(time::Duration::from_millis(2000)),
+                _ => thread::sleep(time::Duration::from_millis(500)),
             }
         }));
         {
@@ -145,7 +145,7 @@ impl Client {
             thread::spawn(move || {
                 let mut rng = rand::thread_rng();
                 loop {
-                    thread::sleep(time::Duration::from_millis(2000));
+                    thread::sleep(time::Duration::from_millis(500));
                     let (id, state) = {
                         let host = host.read().unwrap();
                         (host.id(), host.state())
@@ -193,30 +193,35 @@ impl Client {
     }
 
     fn poll_raw(&mut self) -> Result<(), ClientError> {
-        match self.connector.current() {
-            Ok(id) => {
-                let invocation = { self.host.read().unwrap().current_invocation() };
-                match invocation {
-                    Some(oid) if oid != id => {
-                        self.executor = self.invoke(id)?;
-                    }
-                    None => {
-                        self.executor = self.invoke(id)?;
-                    }
-                    _ => {
-                        if let Some(ref executor) = self.executor {
-                            if signal::killpg(executor.pid, None).is_err() {
-                                self.kill()?;
+        for retries in 0..5 {
+            match self.connector.current() {
+                Ok(id) => {
+                    let invocation = { self.host.read().unwrap().current_invocation() };
+                    match invocation {
+                        Some(oid) if oid != id => {
+                            self.executor = self.invoke(id)?;
+                        }
+                        None => {
+                            self.executor = self.invoke(id)?;
+                        }
+                        _ => {
+                            if let Some(ref executor) = self.executor {
+                                if signal::killpg(executor.pid, None).is_err() {
+                                    self.kill()?;
+                                }
                             }
                         }
                     }
+                    return Ok(());
+                }
+                _ => {
+                    let backoff = rand::thread_rng().gen_range(0, 1 << retries);
+                    thread::sleep(backoff * time::Duration::from_millis(500))
                 }
             }
-            _ => {
-                self.kill()?;
-                self.set_state(HostState::Idle);
-            }
         }
+        self.kill()?;
+        self.set_state(HostState::Idle);
         Ok(())
     }
 
