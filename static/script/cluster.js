@@ -389,6 +389,7 @@ function renderInvocation(invocation) {
       // TODO toast or something
     })
   });
+  content.appendChild(reinvoke);
   if (invocation.id === current) {
     var cancel = document.createElement("a");
     cancel.id = "cancel";
@@ -402,6 +403,7 @@ function renderInvocation(invocation) {
         // TODO toast or something
       });
     });
+    content.appendChild(cancel);
   }
   var setup = document.createElement("div");
   setup.id = "setup";
@@ -440,8 +442,6 @@ function renderInvocation(invocation) {
   logDir.appendChild(dir);
   setup.appendChild(logDir);
   content.appendChild(setup);
-  content.appendChild(reinvoke);
-  content.appendChild(cancel);
 }
 
 function makeCommand(command, args) {
