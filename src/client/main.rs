@@ -163,7 +163,7 @@ impl Client {
                             }
                             break;
                         }
-                        retries = cmp::min(retries + 1, 5);
+                        retries = cmp::min(retries + 1, 3);
                         let backoff = rng.gen_range(0, 1 << retries);
                         thread::sleep(backoff * time::Duration::from_millis(500))
                     }
@@ -193,7 +193,7 @@ impl Client {
     }
 
     fn poll_raw(&mut self) -> Result<(), ClientError> {
-        for retries in 0..5 {
+        for retries in 1..3 {
             match self.connector.current() {
                 Ok(id) => {
                     let invocation = { self.host.read().unwrap().current_invocation() };
