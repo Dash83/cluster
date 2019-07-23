@@ -207,6 +207,12 @@ fn reinvoke(id: InvocationId, instance: State<Instance>) -> JsonValue {
     }
 }
 
+#[get("/cancel")]
+fn cancel(instance: State<Instance>) -> JsonValue {
+    instance.cancel();
+    ok!()
+}
+
 #[post("/upload/<id>/<host>", data = "<upload>")]
 fn upload(
     upload: LogUpload,
@@ -253,6 +259,7 @@ fn main() {
                 invocations,
                 invoke,
                 reinvoke,
+                cancel,
                 upload
             ],
         )

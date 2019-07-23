@@ -389,6 +389,20 @@ function renderInvocation(invocation) {
       // TODO toast or something
     })
   });
+  if (invocation.id === current) {
+    var cancel = document.createElement("a");
+    cancel.id = "cancel";
+    cancel.classList.add("text_button");
+    cancel.appendChild(document.createTextNode("cancel"));
+    cancel.addEventListener("click", function() {
+      get("/api/cancel", function() {
+        updateCurrent();
+        content.removeChild(cancel); 
+      }, function(err) {
+        // TODO toast or something
+      });
+    });
+  }
   var setup = document.createElement("div");
   setup.id = "setup";
   if (invocation.descriptor.command !== null) {
@@ -427,6 +441,7 @@ function renderInvocation(invocation) {
   setup.appendChild(logDir);
   content.appendChild(setup);
   content.appendChild(reinvoke);
+  content.appendChild(cancel);
 }
 
 function makeCommand(command, args) {

@@ -330,6 +330,14 @@ input[type="text"] {
   right: 0px;
 }
 
+#cancel {
+  position: absolute;
+  top: 40px;
+  right: 0px;
+  color: #d84231;
+  border-color: #d84231;
+}
+
 #invoke {
   width: 100%;
   overflow: hidden;
@@ -352,6 +360,11 @@ input[type="text"] {
 
 .text_button:hover {
   background-color: #1da1f2;
+  color: white;
+}
+
+#cancel:hover {
+  background-color: #d84231;
   color: white;
 }
 

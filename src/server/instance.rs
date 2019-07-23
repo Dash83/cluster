@@ -194,6 +194,10 @@ impl Instance {
         self.build_invocation(&url, &commit)
     }
 
+    pub fn cancel(&self) {
+        *self.invocation.lock().unwrap() = None;
+    }
+
     fn build_invocation(&self, url: &str, commit: &str) -> Result<InvocationId, InstanceError> {
         let (invocation, err) = Invocation::new(url, commit, &self.path);
         let id = invocation.id();
