@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::{fmt, fs, thread, time};
+use std::{fmt, thread, time};
 
 pub struct Instance {
     hosts: Arc<Mutex<HashMap<HostId, Host>>>,
@@ -213,8 +213,7 @@ impl Instance {
     }
 
     fn clone(&self, url: &str) -> Result<Repository, InstanceError> {
-        fs::remove_dir_all(&self.path).unwrap_or(());
-        Repository::clone(url, &self.path).map_err(|err| InstanceError {
+        cluster::clone(url, &self.path).map_err(|err| InstanceError {
             cause: Some(Box::new(err)),
             kind: InstanceErrorKind::CloningFailed,
         })

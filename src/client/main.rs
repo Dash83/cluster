@@ -226,9 +226,8 @@ impl Client {
     }
 
     fn clone(&self, url: &str, commit: &str) -> Result<Repository, ClientError> {
-        fs::remove_dir_all(&self.path).unwrap_or(());
         println!("cloning...");
-        let repo = Repository::clone(url, &self.path).map_err(|err| ClientError {
+        let repo = cluster::clone(url, &self.path).map_err(|err| ClientError {
             cause: Some(Box::new(err)),
             kind: ClientErrorKind::CloningFailed,
         })?;
