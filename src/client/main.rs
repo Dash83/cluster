@@ -273,6 +273,7 @@ impl Client {
                 };
                 match fork() {
                     Ok(ForkResult::Parent { child, .. }) => {
+                        ignore_children();
                         self.set_state(HostState::Running {
                             id: invocation.id(),
                         });
@@ -285,17 +286,6 @@ impl Client {
                     }
                     Ok(ForkResult::Child) => {
                         setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
-                        unsafe {
-                            signal::sigaction(
-                                signal::SIGCHLD,
-                                &SigAction::new(
-                                    SigHandler::SigDfl,
-                                    SaFlags::empty(),
-                                    SigSet::empty(),
-                                ),
-                            )
-                            .unwrap();
-                        }
                         let host = self.host.read().unwrap();
                         descriptor.execute_for(
                             host.hostname(),
@@ -320,6 +310,7 @@ impl Client {
     }
 
     fn kill(&mut self) -> Result<(), ClientError> {
+        restore_children();
         if self.executor.is_some() {
             self.history = None;
             mem::swap(&mut self.history, &mut self.executor);
@@ -418,13 +409,6 @@ fn main() {
                 .help("the directory into which experiments will be cloned"),
         )
         .get_matches();
-    unsafe {
-        signal::sigaction(
-            signal::SIGCHLD,
-            &SigAction::new(SigHandler::SigIgn, SaFlags::SA_NOCLDWAIT, SigSet::empty()),
-        )
-        .unwrap();
-    }
     let client = Arc::new(Mutex::new(
         Client::new(
             matches.value_of("server").unwrap(),
@@ -453,5 +437,25 @@ fn main() {
                 _ => process::exit(1),
             }
         }
+    }
+}
+
+fn ignore_children() {
+    unsafe {
+        signal::sigaction(
+            signal::SIGCHLD,
+            &SigAction::new(SigHandler::SigIgn, SaFlags::SA_NOCLDWAIT, SigSet::empty()),
+        )
+        .unwrap();
+    }
+}
+
+fn restore_children() {
+    unsafe {
+        signal::sigaction(
+            signal::SIGCHLD,
+            &SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty()),
+        )
+        .unwrap();
     }
 }
