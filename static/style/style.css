@@ -40,6 +40,12 @@ pre {
   border-radius: 5px;
   counter-reset: line;
   margin: 5px 0px 5px 0px;
+  -webkit-touch-callout: auto;
+  -webkit-user-select: auto;
+  -khtml-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+  user-select: auto;
 }
 
 .button {
@@ -370,7 +376,8 @@ input[type="text"] {
 
 #setup {
   margin-top: 15px;
-  max-height: calc(100% - 140px);
+  max-height: calc(100vh - 245px);
+  margin-bottom: 5px;
   overflow-y: auto;
   border-radius: 5px;
 }
@@ -378,4 +385,70 @@ input[type="text"] {
 .hostname .state {
   float: right;
   margin-right: 5px;
+}
+
+#snackbar {
+  position: absolute;
+  background-color: #373a41;
+  color: white;
+  border-radius: 5px;
+  display: flex;
+  justify-content: center;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 15px 5px 15px;
+  min-width: 100px;
+  cursor: pointer;
+  visibility: hidden;
+  bottom: 30px;
+}
+
+#snackbar.show {
+  visibility: visible;
+  -webkit-animation: fadein 0.25s, fadeout 0.25s 3s;
+  animation: fadein 0.25s, fadeout 0.25s 3s;
+}
+
+@-webkit-keyframes fadein {
+  from {
+    bottom: 0;
+    opacity: 0;
+  }
+  to {
+    bottom: 30px;
+    opacity: 1;
+  }
+}
+
+@keyframes fadein {
+  from {
+    bottom: 0;
+    opacity: 0;
+  }
+  to {
+    bottom: 30px;
+    opacity: 1;
+  }
+}
+
+@-webkit-keyframes fadeout {
+  from {
+    bottom: 30px;
+    opacity: 1;
+  }
+  to {
+    bottom: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fadeout {
+  from {
+    bottom: 30px;
+    opacity: 1;
+  }
+  to {
+    bottom: 0;
+    opacity: 0;
+  }
 }

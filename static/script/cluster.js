@@ -1,9 +1,119 @@
+var view = undefined;
 var current = undefined;
 var viewing = undefined;
-var descriptor = {};
+var invocation = {};
 var hosts = {};
 var invocations = {};
 var hostStates = {};
+var snackbar = [];
+
+let View = class {
+  constructor() {
+    this.name = document.getElementById("viewing_name");
+    this.start = document.getElementById("viewing_time");
+    this.id = document.getElementById("viewing_id");
+    this.url = document.getElementById("viewing_url");
+    this.hash = document.getElementById("viewing_hash");
+    this.reinvoke = document.getElementById("reinvoke");
+    this.cancel = document.getElementById("cancel");
+    this.setup = document.getElementById("setup");
+    this.genLogs = document.getElementById("viewing_log_gen_note");
+    this.logDir = document.getElementById("viewing_log_dir");
+    this.content = document.getElementById("content");
+    this.placeholder = document.getElementById("center_placeholder");
+    this.reinvokeEvent = undefined;
+    this.cancelEvent = undefined;
+  }
+
+  hide() {
+    this.placeholder.classList.remove("hidden");
+    this.content.classList.add("hidden");
+  }
+
+  render() {
+    if (invocation !== undefined) {
+      hostStates = {};
+      this.placeholder.classList.add("hidden");
+      this.content.classList.remove("hidden");
+      empty(this.name);
+      this.name.appendChild(document.createTextNode(invocation.descriptor.name));
+      empty(this.start);
+      var time = document.createTextNode(formatDate(new Date(invocation.start)));
+      this.start.appendChild(time);
+      empty(this.id);
+      this.id.appendChild(document.createTextNode(invocation.id));
+      empty(this.url);
+      this.url.setAttribute("href", invocation.url);
+      this.url.appendChild(document.createTextNode(invocation.url));
+      empty(this.hash);
+      this.hash.appendChild(document.createTextNode(invocation.commit));
+      if (this.reinvokeEvent !== undefined) {
+        this.reinvoke.removeEventListener("click", this.reinvokeEvent);
+      }
+      this.reinvokeEvent = function() {
+        displaySnackbar("attempting to reclone repository");
+        get("/api/reinvoke/" + invocation.id, function(response) {
+          updateCurrent();
+          viewing = response.id;
+          invocation = response;
+          view.render();
+        }, function(err) {
+          displaySnackbar(err);
+        })
+      };
+      this.reinvoke.addEventListener("click", this.reinvokeEvent);
+      if (this.cancelEvent !== undefined) {
+        this.cancel.removeEventListener("click", this.cancelEvent);
+      }
+      if (invocation.id === current) {
+        this.cancel.classList.remove("hidden");
+        this.cancelEvent = function() {
+          displaySnackbar("attempting to cancel invocation");
+          get("/api/cancel", function() {
+            updateCurrent();
+            document.getElementById("cancel").classList.add("hidden");
+          }, function(err) {
+            displaySnackbar(err);
+          });
+        };
+        this.cancel.addEventListener("click", this.cancelEvent);
+      } else {
+        this.cancel.classList.add("hidden");
+      }
+      if (invocation.descriptor.gen_logs) {
+        this.genLogs.classList.remove("hidden");
+      } else {
+        this.genLogs.classList.add("hidden");
+      }
+      empty(this.logDir);
+      this.logDir.appendChild(document.createTextNode(invocation.descriptor.log_dir));
+      empty(this.setup);
+      if (invocation.descriptor.command !== null) {
+        var global = document.createElement("h3");
+        global.appendChild(document.createTextNode("global setup"));
+        this.setup.appendChild(global);
+        this.setup.appendChild(makeCommand(invocation.descriptor.command, invocation.descriptor.args));
+      }
+      var hostHeader = document.createElement("h3");
+      hostHeader.appendChild(document.createTextNode("hosts"));
+      this.setup.appendChild(hostHeader);
+      for (var host in invocation.descriptor.hosts) {
+        var hostname = document.createElement("p");
+        hostname.classList.add("hostname");
+        hostname.appendChild(document.createTextNode(host));
+        var state = document.createElement("a");
+        hostStates[host] = state;
+        updateHostState(host);
+        hostname.appendChild(state);
+        this.setup.appendChild(hostname);
+        var record = invocation.descriptor.hosts[host];
+        if (record.command !== null) {
+          this.setup.appendChild(makeCommand(record.command, record.args));
+        }
+      }
+    }
+  }
+}
 
 let Host = class {
   constructor(record) {
@@ -159,22 +269,24 @@ function get(url, callback, err) {
   xhttp.open("GET", url);
   xhttp.send();
   xhttp.onreadystatechange = (e) => {
-    var response;
-    try {
-      response = JSON.parse(xhttp.responseText);
-    } catch (e) { return; }
-    if (response.status == "ok") {
-      delete response.status;
-      if ('payload' in response) {
-        callback(response.payload);
+    if (xhttp.readyState === 4) {
+      var response;
+      try {
+        response = JSON.parse(xhttp.responseText);
+      } catch (e) { return; }
+      if (response.status == "ok") {
+        delete response.status;
+        if ('payload' in response) {
+          callback(response.payload);
+        } else {
+          callback();
+        }
       } else {
-        callback();
+        if (!('msg' in response)) {
+          response.msg = "an error occured";
+        }
+        err(response.msg);
       }
-    } else {
-      if (!('msg' in response)) {
-        response.msg = "an error occured";
-      }
-      err(response.msg);
     }
   }
 }
@@ -214,24 +326,26 @@ function makeEmpty() {
   return element;
 }
 
+function empty(element) {
+  while (element.firstChild) {
+    element.removeChild(element.firstChild);
+  }
+}
+
 function updateCurrent() {
   var active = document.getElementById("active");
   get("/api/current", function(id) {
     if (current !== id) {
       current = id;
       updateInvocations(function() {
-        while (active.firstChild) {
-          active.removeChild(active.firstChild);
-        }
+        empty(active);
         active.appendChild(invocations[current].element);
       });
     }
   }, function(err) {
     current = undefined;
     updateInvocations(function() {
-      while (active.firstChild) {
-        active.removeChild(active.firstChild);
-      }
+      empty(active);
       active.appendChild(makeEmpty());
     });
   });
@@ -264,36 +378,32 @@ function updateInvocations(callback) {
         list.removeChild(child);
       }
     }
+    for (id in invocations) {
+      if (!children.includes(id)) {
+        list.appendChild(invocations[id].element);
+      }
+    }
     var placeholder = document.getElementById("history_placeholder");
     if (list.children.length == 0) {
       placeholder.classList.remove("hidden");
     } else {
       placeholder.classList.add("hidden");
     }
-    for (id in invocations) {
-      if (!children.includes(id)) {
-        list.appendChild(invocations[id].element);
-      }
-    }
     if (viewing !== undefined && !children.includes(viewing)
         && (current === undefined || current !== viewing)) {
       viewing = undefined;
-      var content = document.getElementById("content");
-      while (content.firstChild) {
-        content.removeChild(content.firstChild);
-      }
-      document.getElementById("center_placeholder").classList.remove("hidden");
+      view.hide();
     }
     callback();
-  }, function(err) {});
+  }, function(err) {
+    displaySnackbar(err);
+  });
 }
 
 function updateHosts() {
   get("/api/hosts", function(response) {
     var list = document.getElementById("hosts");
-    while (list.firstChild) {
-      list.removeChild(list.firstChild);
-    }
+    empty(list);
     for (record of response) {
       list.appendChild((new Host(record)).element);
       hosts[record.hostname] = record;
@@ -305,23 +415,23 @@ function updateHosts() {
     } else {
       placeholder.classList.add("hidden");
     }
-  }, function(err) {});
+  }, function(err) {
+    element.classList.add("show");
+  });
 }
 
 function updateHostState(host) {
   if (host in hostStates) {
     var element = hostStates[host];
-    while (element.firstChild) {
-      element.removeChild(element.firstChild);
-    }
+    empty(element);
     element.classList = [];
     element.classList.add("state");
     element.removeAttribute("href");
     if (host in hosts) {
-      if (hosts[host].hostname in descriptor.logs) {
+      if (hosts[host].hostname in invocation.logs) {
         element.classList.add("logs");
         element.appendChild(document.createTextNode("logs"));
-        element.setAttribute("href", descriptor.logs[hosts[host].hostname]);
+        element.setAttribute("href", invocation.logs[hosts[host].hostname]);
       } else if (hosts[host].state.id === viewing) {
         element.classList.add(hosts[host].state.desc);
         element.appendChild(document.createTextNode(hosts[host].state.desc));
@@ -340,108 +450,6 @@ function updateHostState(host) {
       element.appendChild(document.createTextNode("disconnected"));
     }
   }
-}
-
-function renderInvocation(invocation) {
-  descriptor = invocation;
-  hostStates = {};
-  document.getElementById("center_placeholder").classList.add("hidden");
-  var content = document.getElementById("content");
-  while (content.firstChild) {
-    content.removeChild(content.firstChild);
-  }
-  var name = document.createElement("h2");
-  name.appendChild(document.createTextNode(invocation.descriptor.name));
-  content.appendChild(name);
-  var start = document.createElement("div");
-  start.classList.add("time");
-  var time = document.createTextNode(formatDate(new Date(invocation.start)));
-  start.appendChild(time);
-  content.appendChild(start);
-  var id = document.createElement("div");
-  id.classList.add("id");
-  id.appendChild(document.createTextNode(invocation.id));
-  content.appendChild(id);
-  var repo = document.createElement("div");
-  repo.classList.add("repo");
-  var url = document.createElement("a");
-  url.classList.add("url");
-  url.setAttribute("href", invocation.url);
-  url.appendChild(document.createTextNode(invocation.url));
-  repo.appendChild(url);
-  var commit = document.createElement("div");
-  var hash = document.createElement("a");
-  hash.classList.add("commit");
-  hash.appendChild(document.createTextNode(invocation.commit));
-  commit.appendChild(hash);
-  repo.appendChild(commit);
-  content.appendChild(repo);
-  var reinvoke = document.createElement("a");
-  reinvoke.id = "reinvoke";
-  reinvoke.classList.add("text_button");
-  reinvoke.appendChild(document.createTextNode("reinvoke"));
-  reinvoke.addEventListener("click", function() {
-    get("/api/reinvoke/" + invocation.id, function(response) {
-      updateCurrent();
-      viewing = response.id;
-      renderInvocation(response);
-    }, function(err) {
-      // TODO toast or something
-    })
-  });
-  content.appendChild(reinvoke);
-  if (invocation.id === current) {
-    var cancel = document.createElement("a");
-    cancel.id = "cancel";
-    cancel.classList.add("text_button");
-    cancel.appendChild(document.createTextNode("cancel"));
-    cancel.addEventListener("click", function() {
-      get("/api/cancel", function() {
-        updateCurrent();
-        content.removeChild(cancel); 
-      }, function(err) {
-        // TODO toast or something
-      });
-    });
-    content.appendChild(cancel);
-  }
-  var setup = document.createElement("div");
-  setup.id = "setup";
-  if (invocation.descriptor.command !== null) {
-    var global = document.createElement("h3");
-    global.appendChild(document.createTextNode("global setup"));
-    setup.appendChild(global);
-    setup.appendChild(makeCommand(invocation.descriptor.command, invocation.descriptor.args));
-  }
-  var hostHeader = document.createElement("h3");
-  hostHeader.appendChild(document.createTextNode("hosts"));
-  setup.appendChild(hostHeader);
-  for (host in invocation.descriptor.hosts) {
-    var hostname = document.createElement("p");
-    hostname.classList.add("hostname");
-    hostname.appendChild(document.createTextNode(host));
-    var state = document.createElement("a");
-    hostStates[host] = state;
-    updateHostState(host);
-    hostname.appendChild(state);
-    setup.appendChild(hostname);
-    var record = invocation.descriptor.hosts[host];
-    if (record.command !== null) {
-      setup.appendChild(makeCommand(record.command, record.args)); 
-    }
-  }
-  if (invocation.descriptor.gen_logs) {
-    var note = document.createElement("p");
-    note.appendChild(document.createTextNode("logs files will be generated from standard output"));
-    setup.appendChild(note);
-  }
-  var logDir = document.createElement("p");
-  logDir.appendChild(document.createTextNode("log files on hosts will be uploaded from "));
-  var dir = document.createElement("code");
-  dir.appendChild(document.createTextNode(invocation.descriptor.log_dir));
-  logDir.appendChild(dir);
-  setup.appendChild(logDir);
-  content.appendChild(setup);
 }
 
 function makeCommand(command, args) {
@@ -463,32 +471,48 @@ function makeCommand(command, args) {
 function viewInvocation(id) {
   get("/api/invocation/" + id, function(response) {
     viewing = id;
-    renderInvocation(response);
-  }, function(err) {});
+    invocation = response;
+    view.render();
+  }, function(err) {
+    displaySnackbar(err);
+  });
 }
 
-function updateViewing() {
-  if (viewing !== undefined) {
-    viewInvocation(viewing);
+function updateSnackbar() {
+  var element = document.getElementById("snackbar");
+  if (snackbar.length > 0 && !element.classList.contains("show")) {
+    empty(element);
+    element.appendChild(document.createTextNode(snackbar.shift()));
+    setTimeout(function() {
+      element.classList.remove("show");
+    }, 3250);
+    element.classList.add("show");
   }
+}
+
+function displaySnackbar(msg) {
+  snackbar.push(msg);
 }
 
 setInterval(updateCurrent, 500);
 setInterval(updateHosts, 500);
-setInterval(updateViewing, 500);
+setInterval(updateSnackbar, 100);
 
 document.addEventListener('DOMContentLoaded', function() {
+  view = new View();
   updateCurrent();
   updateHosts();
   document.getElementById("invoke_button").addEventListener("click", function() {
+    displaySnackbar("attempting to clone repository");
     var url = encodeURIComponent(document.getElementById('input').value).trim();
     if (url.length > 0) {
-      document.getElementById('input').value = '';
       get("/api/invoke/" + url, function(response) {
+        document.getElementById('input').value = '';
         viewing = response.id;
-        renderInvocation(response);
+        invocation = response;
+        view.render();
       }, function(err) {
-        // TODO toast or something
+        displaySnackbar(err);
       });
     }
   });

@@ -32,7 +32,26 @@
           <a class="text_button" id="invoke_button">invoke</a>
         </div>
         <p id="center_placeholder" class="placeholder"><br>not viewing an invocation</p>
-        <div id="content"></div>
+        <div id="content" class="hidden">
+          <h2 id="viewing_name"></h2>
+          <div id="viewing_time" class="time"></div>
+          <div id="viewing_id" class="id"></div>
+          <div id="viewing_repo">
+            <a id="viewing_url" class="url"></a>
+            <div id="viewing_commit">
+              <a id="viewing_hash" class="commit"></a>
+            </div>
+          </div>
+          <a id="reinvoke" class="text_button">reinvoke</a>
+          <a id="cancel" class="text_button">cancel</a>
+          <div id="setup"></div>
+          <p id="viewing_log_gen_note">
+            log files will be generated from standard output
+          </p>
+          <p id="viewing_log_dir_note">
+            log files on hosts will be uploaded from <code id="viewing_log_dir"></code>
+          </p>
+        </div>
       </div>
       <div id="right">
         <span class="subtitle">
@@ -43,5 +62,6 @@
         <div id="hosts"></div>
       </div>
     </div>
+    <div id="snackbar">hello world</div>
   </body>
 </html>
