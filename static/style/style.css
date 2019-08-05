@@ -40,12 +40,6 @@ pre {
   border-radius: 5px;
   counter-reset: line;
   margin: 5px 0px 5px 0px;
-  -webkit-touch-callout: auto;
-  -webkit-user-select: auto;
-  -khtml-user-select: auto;
-  -moz-user-select: auto;
-  -ms-user-select: auto;
-  user-select: auto;
 }
 
 .button {
@@ -451,4 +445,13 @@ input[type="text"] {
     bottom: 0;
     opacity: 0;
   }
+}
+
+pre, code, .viewing_commit {
+  -webkit-touch-callout: all;
+  -webkit-user-select: all;
+  -khtml-user-select: all;
+  -moz-user-select: all;
+  -ms-user-select: all;
+  user-select: all;
 }
