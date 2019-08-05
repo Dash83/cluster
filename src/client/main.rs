@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate clap;
+#[macro_use]
+extern crate log;
 
 use api::Connector;
 
@@ -129,14 +131,17 @@ impl Client {
         let hostname = gethostname::gethostname()
             .into_string()
             .map_err(|_| ClientError::from(ClientErrorKind::NoHostname))?;
+        info!("registering with server...");
         let host = Arc::new(RwLock::new(loop {
-            println!("registering...");
             match connector.register(&hostname) {
                 Ok(host) => {
-                    println!("done");
+                    info!("registered");
                     break host;
                 }
-                _ => thread::sleep(time::Duration::from_millis(500)),
+                _ => {
+                    info!("retrying registration...");
+                    thread::sleep(time::Duration::from_millis(500));
+                },
             }
         }));
         {
@@ -151,15 +156,16 @@ impl Client {
                         (host.id(), host.state())
                     };
                     let mut retries = 0;
+                    debug!("pushing client status");
                     while let Err(ref err) = connector.status(id, state) {
                         if err.is_bad_response() {
-                            println!("registering...");
+                            warn!("failed to push status, retrying registration...");
                             match connector.register(&hostname) {
                                 Ok(registered) => {
+                                    info!("registered");
                                     *host.write().unwrap() = registered;
-                                    println!("done");
                                 }
-                                _ => {}
+                                _ => warn!("registration failed")
                             }
                             break;
                         }
@@ -180,13 +186,14 @@ impl Client {
     }
 
     fn poll(&mut self) {
+        debug!("polling server status");
         match self.poll_raw() {
             Err(err) => {
                 let invocation = { self.host.read().unwrap().current_invocation() };
                 if let Some(id) = invocation {
                     self.set_state(HostState::Errored { id });
                 }
-                println!("{:?}", err);
+                error!("{}", err);
             }
             _ => {}
         }
@@ -215,6 +222,7 @@ impl Client {
                     return Ok(());
                 }
                 _ => {
+                    warn!("failed to get current invocation ID, retrying...");
                     let backoff = rand::thread_rng().gen_range(0, 1 << retries);
                     thread::sleep(backoff * time::Duration::from_millis(500))
                 }
@@ -226,7 +234,6 @@ impl Client {
     }
 
     fn clone(&self, url: &str, commit: &str) -> Result<Repository, ClientError> {
-        println!("cloning...");
         let repo = cluster::clone(url, &self.path).map_err(|err| ClientError {
             cause: Some(Box::new(err)),
             kind: ClientErrorKind::CloningFailed,
@@ -260,10 +267,15 @@ impl Client {
                 let mut repo = None;
                 if let Some(ref old) = self.history {
                     if old.invocation.url() == invocation.url() {
-                        if let Ok(_) = cluster::rewind(&old.repo, invocation.commit()) {
-                            if let Ok(opened) = Repository::open(&self.path) {
-                                repo = Some(opened);
-                            }
+                        debug!("attempting to use existing repository");
+                        match cluster::rewind(&old.repo, invocation.commit()) {
+                            Ok(_) => match Repository::open(&self.path) {
+                                Ok(opened) => {
+                                    repo = Some(opened);
+                                },
+                                _ => debug!("failed to reopen cloned repository"),
+                            },
+                            _ => debug!("failed to jump to commit {}", invocation.commit()),
                         }
                     }
                 }
@@ -271,9 +283,11 @@ impl Client {
                     Some(repo) => repo,
                     None => self.clone(invocation.url(), invocation.commit())?,
                 };
+                info!("forking child process...");
                 match fork() {
                     Ok(ForkResult::Parent { child, .. }) => {
                         ignore_children();
+                        info!("forked child process");
                         self.set_state(HostState::Running {
                             id: invocation.id(),
                         });
@@ -315,10 +329,10 @@ impl Client {
             self.history = None;
             mem::swap(&mut self.history, &mut self.executor);
             if let Some(ref executor) = self.history {
-                println!("killing child process...");
+                info!("killing child process...");
                 signal::killpg(executor.pid, signal::SIGTERM).unwrap_or(());
                 signal::killpg(executor.pid, signal::SIGKILL).unwrap_or(());
-                println!("done");
+                info!("killed child process");
                 self.upload(executor)?;
                 self.set_state(HostState::Done {
                     id: executor.invocation.id(),
@@ -330,7 +344,7 @@ impl Client {
 
     fn upload(&self, executor: &Executor) -> Result<(), ClientError> {
         if let Some(path) = self.compress(executor)? {
-            println!("uploading logs...");
+            info!("uploading logs...");
             self.set_state(HostState::Uploading {
                 id: executor.invocation.id(),
             });
@@ -345,7 +359,7 @@ impl Client {
                     kind: ClientErrorKind::UploadFailed,
                 })?;
             fs::remove_file(path).unwrap_or(());
-            println!("done");
+            info!("uploaded logs");
         }
         Ok(())
     }
@@ -353,7 +367,7 @@ impl Client {
     fn compress(&self, executor: &Executor) -> Result<Option<PathBuf>, ClientError> {
         let log_dir = self.path.join(executor.descriptor.log_dir());
         if log_dir.exists() {
-            println!("compressing logs...");
+            info!("compressing logs...");
             self.set_state(HostState::Compressing {
                 id: executor.invocation.id(),
             });
@@ -368,7 +382,7 @@ impl Client {
                     cause: Some(Box::new(err)),
                     kind: ClientErrorKind::CompressionFailed,
                 })?;
-            println!("done");
+            info!("compressed logs");
             Ok(Some(path))
         } else {
             Ok(None)
@@ -409,6 +423,8 @@ fn main() {
                 .help("the directory into which experiments will be cloned"),
         )
         .get_matches();
+    env_logger::init();
+    info!("starting client...");
     let client = Arc::new(Mutex::new(
         Client::new(
             matches.value_of("server").unwrap(),
@@ -431,7 +447,7 @@ fn main() {
     signal_hook::flag::register(signal_hook::SIGQUIT, Arc::clone(&term)).unwrap();
     while !term.load(Ordering::Relaxed) {
         if term.swap(false, Ordering::Relaxed) {
-            println!("exiting...");
+            info!("exiting...");
             match client.lock().unwrap().kill() {
                 Ok(_) => process::exit(0),
                 _ => process::exit(1),

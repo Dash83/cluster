@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 
 use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::{Config, Cred, FetchOptions, ObjectType, Oid, RemoteCallbacks, Repository, ResetType};
@@ -12,6 +14,7 @@ pub mod host;
 pub mod invocation;
 
 pub fn clone<P: AsRef<Path>>(url: &str, path: P) -> Result<Repository, git2::Error> {
+    info!("cloning {}", url);
     fs::remove_dir_all(&path).unwrap_or(());
     let mut remote_callbacks = RemoteCallbacks::new();
     remote_callbacks.credentials(|_, _, _| {
@@ -21,23 +24,27 @@ pub fn clone<P: AsRef<Path>>(url: &str, path: P) -> Result<Repository, git2::Err
     });
     let mut fetch_options = FetchOptions::new();
     fetch_options.remote_callbacks(remote_callbacks);
-    RepoBuilder::new()
+    let repo = RepoBuilder::new()
         .fetch_options(fetch_options)
-        .clone(url, path.as_ref())
+        .clone(url, path.as_ref())?;
+    info!("cloned {}", url);
+    Ok(repo)
 }
 
 pub fn rewind(repo: &Repository, commit: &str) -> Result<(), git2::Error> {
-    if let Ok(mut remote) = repo.find_remote("origin") {
+    info!("fetching origin/master...");
+    match repo.find_remote("origin") {
         // To update, fetch and reset --hard
-        match remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)
+        Ok(mut remote) => match remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)
             .and_then(|_| repo.head())
             .map(|head_ref| head_ref.target().unwrap())
             .and_then(|head| repo.find_object(head, None))
             .and_then(|obj| repo.reset(&obj, ResetType::Hard, None))
         {
-            Ok(_) => println!("fetched origin/master"),
-            _ => println!("couldn't fetch origin/master"),
-        }
+            Ok(_) => info!("fetched origin/master"),
+            _ => warn!("failed to reset to FETCH_HEAD"),
+        },
+        _ => info!("failed to fetch origin/master"),
     }
     // Find the commit we want to rewind to
     let object = commit
@@ -46,6 +53,6 @@ pub fn rewind(repo: &Repository, commit: &str) -> Result<(), git2::Error> {
     let mut checkout = CheckoutBuilder::new();
     // Reset hard
     repo.reset(&object, ResetType::Hard, Some(checkout.force()))?;
-    println!("jumped to commit {}", commit);
+    info!("jumped to commit {}", commit);
     Ok(())
 }

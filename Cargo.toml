@@ -30,6 +30,8 @@ tar = "0.4.26"
 flate2 = "1.0.9"
 clap = "2.33.0"
 rand = "0.7.0"
+log = "0.4.8"
+env_logger = "0.6.2"
 
 [dependencies.rocket_contrib]
 version = "0.4.2"
