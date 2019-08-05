@@ -27,9 +27,25 @@ pub fn clone<P: AsRef<Path>>(url: &str, path: P) -> Result<Repository, git2::Err
 }
 
 pub fn rewind(repo: &Repository, commit: &str) -> Result<(), git2::Error> {
+    if let Ok(mut remote) = repo.find_remote("origin") {
+        // To update, fetch and reset --hard
+        match remote.fetch(&["refs/heads/*:refs/heads/*"], None, None)
+            .and_then(|_| repo.head())
+            .map(|head_ref| head_ref.target().unwrap())
+            .and_then(|head| repo.find_object(head, None))
+            .and_then(|obj| repo.reset(&obj, ResetType::Hard, None))
+        {
+            Ok(_) => println!("fetched origin/master"),
+            _ => println!("couldn't fetch origin/master"),
+        }
+    }
+    // Find the commit we want to rewind to
     let object = commit
         .parse::<Oid>()
         .and_then(|oid| repo.find_object(oid, Some(ObjectType::Commit)))?;
     let mut checkout = CheckoutBuilder::new();
-    repo.reset(&object, ResetType::Hard, Some(checkout.force()))
+    // Reset hard
+    repo.reset(&object, ResetType::Hard, Some(checkout.force()))?;
+    println!("jumped to commit {}", commit);
+    Ok(())
 }
