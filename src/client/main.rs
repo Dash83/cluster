@@ -141,7 +141,7 @@ impl Client {
                 _ => {
                     info!("retrying registration...");
                     thread::sleep(time::Duration::from_millis(500));
-                },
+                }
             }
         }));
         {
@@ -165,7 +165,7 @@ impl Client {
                                     info!("registered");
                                     *host.write().unwrap() = registered;
                                 }
-                                _ => warn!("registration failed")
+                                _ => warn!("registration failed"),
                             }
                             break;
                         }
@@ -187,15 +187,12 @@ impl Client {
 
     fn poll(&mut self) {
         debug!("polling server status");
-        match self.poll_raw() {
-            Err(err) => {
-                let invocation = { self.host.read().unwrap().current_invocation() };
-                if let Some(id) = invocation {
-                    self.set_state(HostState::Errored { id });
-                }
-                error!("{}", err);
+        if let Err(err) = self.poll_raw() {
+            let invocation = { self.host.read().unwrap().current_invocation() };
+            if let Some(id) = invocation {
+                self.set_state(HostState::Errored { id });
             }
-            _ => {}
+            error!("{}", err);
         }
     }
 
@@ -272,7 +269,7 @@ impl Client {
                             Ok(_) => match Repository::open(&self.path) {
                                 Ok(opened) => {
                                     repo = Some(opened);
-                                },
+                                }
                                 _ => debug!("failed to reopen cloned repository"),
                             },
                             _ => debug!("failed to jump to commit {}", invocation.commit()),

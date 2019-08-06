@@ -104,7 +104,9 @@ mod host {
 
     #[get("/<id>")]
     pub fn host(id: HostId, instance: State<Instance>) -> JsonValue {
-        instance.host(id, |host| ok!(host)).unwrap_or(err!())
+        instance
+            .host(id, |host| ok!(host))
+            .unwrap_or_else(|| err!())
     }
 
     pub mod status {
@@ -118,7 +120,7 @@ mod host {
                     host.set_state(state);
                     ok!()
                 })
-                .unwrap_or(err!())
+                .unwrap_or_else(|| err!())
         }
 
         #[get("/<host>/idle")]
@@ -155,7 +157,7 @@ mod host {
 
 #[get("/")]
 fn index() -> Template {
-    Template::render("index", {})
+    Template::render("index", ())
 }
 
 #[get("/hosts")]
@@ -168,14 +170,14 @@ fn current(instance: State<Instance>) -> JsonValue {
     instance
         .current_invocation()
         .map(|id| ok!(id))
-        .unwrap_or(err!())
+        .unwrap_or_else(|| err!())
 }
 
 #[get("/invocation/<id>")]
 fn invocation(id: InvocationId, instance: State<Instance>) -> JsonValue {
     instance
         .invocation(id, |invocation| ok!(invocation))
-        .unwrap_or(err!())
+        .unwrap_or_else(|| err!())
 }
 
 #[get("/invocations")]
@@ -192,7 +194,7 @@ fn invoke(url: String, instance: State<Instance>) -> JsonValue {
     match instance.invoke(&url) {
         Ok(id) => instance
             .invocation(id, |invocation| ok!(invocation))
-            .unwrap_or(err!()),
+            .unwrap_or_else(|| err!()),
         Err(err) => err!(err),
     }
 }
@@ -202,7 +204,7 @@ fn reinvoke(id: InvocationId, instance: State<Instance>) -> JsonValue {
     match instance.reinvoke(id) {
         Ok(id) => instance
             .invocation(id, |invocation| ok!(invocation))
-            .unwrap_or(err!()),
+            .unwrap_or_else(|| err!()),
         Err(err) => err!(err),
     }
 }
@@ -227,9 +229,9 @@ fn upload(
                     invocation.add_log(host, upload.0);
                     json!({ "status": "ok" })
                 })
-                .unwrap_or(err!())
+                .unwrap_or_else(|| err!())
         })
-        .unwrap_or(err!())
+        .unwrap_or_else(|| err!())
 }
 
 #[catch(404)]

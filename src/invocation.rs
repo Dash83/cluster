@@ -65,7 +65,7 @@ impl Invocation {
                 id: InvocationId(Uuid::new_v4()),
                 url: url.to_string(),
                 commit: commit.to_string(),
-                descriptor: descriptor,
+                descriptor,
                 start: Utc::now(),
                 logs: HashMap::new(),
             },
