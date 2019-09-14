@@ -220,7 +220,7 @@ impl Client {
                 }
                 _ => {
                     warn!("failed to get current invocation ID, retrying...");
-                    let backoff = rand::thread_rng().gen_range(1, 1 << cmp::max(retries, 3));
+                    let backoff = rand::thread_rng().gen_range(1, 1 << cmp::min(retries, 3));
                     thread::sleep(backoff * time::Duration::from_millis(500))
                 }
             }
