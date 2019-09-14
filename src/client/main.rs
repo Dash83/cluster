@@ -197,7 +197,7 @@ impl Client {
     }
 
     fn poll_raw(&mut self) -> Result<(), ClientError> {
-        for retries in 1..=5 {
+        for retries in 0..128 {
             match self.connector.current() {
                 Ok(id) => {
                     let invocation = { self.host.read().unwrap().current_invocation() };
@@ -220,7 +220,7 @@ impl Client {
                 }
                 _ => {
                     warn!("failed to get current invocation ID, retrying...");
-                    let backoff = rand::thread_rng().gen_range(1, 1 << retries);
+                    let backoff = rand::thread_rng().gen_range(1, 1 << cmp::max(retries, 3));
                     thread::sleep(backoff * time::Duration::from_millis(500))
                 }
             }
